@@ -21,11 +21,7 @@
 -ifdef(use_specs).
 
 -export_type([maybe/1, info/0, infos/0, info_key/0, info_keys/0,
-              message/0, msg_id/0, basic_message/0,
-              delivery/0, content/0, decoded_content/0, undecoded_content/0,
-              unencoded_content/0, encoded_content/0, message_properties/0,
               vhost/0, ctag/0, amqp_error/0, r/1, r2/2, r3/3, listener/0,
-              binding/0, binding_source/0, binding_destination/0,
               amqqueue/0, 
               connection/0, protocol/0, user/0, internal_user/0,
               username/0, password/0, password_hash/0, ok/1, error/1,
@@ -41,37 +37,6 @@
 
 %% TODO: make this more precise by tying specific class_ids to
 %% specific properties
--type(undecoded_content() ::
-        #content{class_id              :: rabbit_framing:amqp_class_id(),
-                 properties            :: 'none',
-                 properties_bin        :: binary(),
-                 payload_fragments_rev :: [binary()]} |
-        #content{class_id              :: rabbit_framing:amqp_class_id(),
-                 properties            :: rabbit_framing:amqp_property_record(),
-                 properties_bin        :: 'none',
-                 payload_fragments_rev :: [binary()]}).
--type(unencoded_content() :: undecoded_content()).
--type(decoded_content() ::
-        #content{class_id              :: rabbit_framing:amqp_class_id(),
-                 properties            :: rabbit_framing:amqp_property_record(),
-                 properties_bin        :: maybe(binary()),
-                 payload_fragments_rev :: [binary()]}).
--type(encoded_content() ::
-        #content{class_id       :: rabbit_framing:amqp_class_id(),
-                 properties     :: maybe(rabbit_framing:amqp_property_record()),
-                 properties_bin        :: binary(),
-                 payload_fragments_rev :: [binary()]}).
--type(content() :: undecoded_content() | decoded_content()).
--type(message() :: basic_message()).
--type(delivery() ::
-        #delivery{mandatory :: boolean(),
-                  immediate :: boolean(),
-                  sender    :: pid(),
-                  message   :: message()}).
--type(message_properties() ::
-        #message_properties{expiry :: pos_integer() | 'undefined',
-                            needs_confirming :: boolean()}).
-
 -type(info_key() :: atom()).
 -type(info_keys() :: [info_key()]).
 
@@ -97,8 +62,6 @@
                   protocol :: atom(),
                   host     :: rabbit_networking:hostname(),
                   port     :: rabbit_networking:ip_port()}).
-
-
 
 -type(amqqueue() ::
         #amqqueue{name            :: rabbit_amqqueue:name(),

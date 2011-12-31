@@ -23,7 +23,7 @@
 
 -export([system_continue/3, system_terminate/4, system_code_change/4]).
 
--export([init/4, mainloop/2]).
+-export([init/2, mainloop/2]).
 
 -export([conserve_memory/2, server_properties/1]).
 
@@ -37,7 +37,7 @@
 
 %%--------------------------------------------------------------------------
 
--record(v1, {parent, sock, connection, callback, recv_len, pending_recv,
+-record(v1, {parent, clientpid, sock, connection, callback, recv_len, pending_recv,
              connection_state, queue_collector,  stats_timer,
              channel_sup_sup_pid, start_heartbeat_fun, buf, buf_len,
              auth_mechanism, auth_state}).
@@ -76,11 +76,9 @@
                                   rabbit_framing:amqp_table()).
 
 %% These specs only exists to add no_return() to keep dialyzer happy
--spec(init/4 :: (pid(), pid(), pid(), rabbit_heartbeat:start_heartbeat_fun())
-                -> no_return()).
--spec(start_connection/7 ::
-        (pid(), pid(), pid(), rabbit_heartbeat:start_heartbeat_fun(), any(),
-         rabbit_net:socket(),
+-spec(init/2 :: (pid(), pid()) -> no_return()).
+-spec(start_connection/5 ::
+        (pid(), pid(), any(), rabbit_net:socket(),
          fun ((rabbit_net:socket()) ->
                      rabbit_types:ok_or_error2(
                        rabbit_net:socket(), any()))) -> no_return()).
@@ -109,7 +107,7 @@ init(Parent, ClientPid) ->
     receive
         {go, Sock, SockTransform} ->
             start_connection(
-              Parent, ChannelSupSupPid,Deb, Sock, SockTransform)
+              Parent, ClientPid, Deb, Sock, SockTransform)
     end.
 
 system_continue(Parent, Deb, State) ->
@@ -187,7 +185,7 @@ socket_op(Sock, Fun) ->
                            exit(normal)
     end.
 
-start_connection(Parent, ClientPid, Deb, Sock, SockTransform) ->
+start_connection(Parent, _ClientPid, Deb, Sock, SockTransform) ->
     process_flag(trap_exit, true),
     {PeerAddress, PeerPort} = socket_op(Sock, fun rabbit_net:peername/1),
     PeerAddressS = rabbit_misc:ntoab(PeerAddress),
@@ -210,7 +208,6 @@ start_connection(Parent, ClientPid, Deb, Sock, SockTransform) ->
                 recv_len            = 0,
                 pending_recv        = false,
                 connection_state    = pre_init,
-                heartbeater         = none,
                 clientpid = clientpid,
                 buf                 = [],
                 buf_len             = 0,
@@ -340,9 +337,7 @@ handle_other(Other, _Deb, _State) ->
     %% internal error -> something worth dying for
     exit({unexpected_message, Other}).
 
-switch_callback(State = #v1{connection_state = blocked,
-                            heartbeater = Heartbeater}, Callback, Length) ->
-    ok = rabbit_heartbeat:pause_monitor(Heartbeater),
+switch_callback(State = #v1{connection_state = blocked }, Callback, Length) ->
     State#v1{callback = Callback, recv_len = Length};
 switch_callback(State, Callback, Length) ->
     State#v1{callback = Callback, recv_len = Length}.
@@ -358,9 +353,7 @@ internal_conserve_memory(true,  State = #v1{connection_state = running}) ->
     State#v1{connection_state = blocking};
 internal_conserve_memory(false, State = #v1{connection_state = blocking}) ->
     State#v1{connection_state = running};
-internal_conserve_memory(false, State = #v1{connection_state = blocked,
-                                            heartbeater      = Heartbeater}) ->
-    ok = rabbit_heartbeat:resume_monitor(Heartbeater),
+internal_conserve_memory(false, State = #v1{connection_state = blocked}) ->
     State#v1{connection_state = running};
 internal_conserve_memory(_Conserve, State) ->
     State.
