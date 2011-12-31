@@ -21,10 +21,9 @@
 -ifdef(use_specs).
 
 -export_type([maybe/1, info/0, infos/0, info_key/0, info_keys/0,
-              vhost/0, ctag/0, amqp_error/0, r/1, r2/2, r3/3, listener/0,
-              amqqueue/0, 
-              connection/0, protocol/0, user/0, internal_user/0,
-              username/0, password/0, password_hash/0, ok/1, error/1,
+              ctag/0, listener/0,
+              connection/0, protocol/0,
+              username/0, password/0, ok/1, error/1,
               ok_or_error/1, ok_or_error2/2, ok_pid_or_error/0, channel_exit/0,
               connection_exit/0]).
 
@@ -32,7 +31,6 @@
 -type(connection_exit() :: no_return()).
 
 -type(maybe(T) :: T | 'none').
--type(vhost() :: binary()).
 -type(ctag() :: binary()).
 
 %% TODO: make this more precise by tying specific class_ids to
@@ -43,55 +41,18 @@
 -type(info() :: {info_key(), any()}).
 -type(infos() :: [info()]).
 
--type(amqp_error() ::
-        #amqp_error{name        :: rabbit_framing:amqp_exception(),
-                    explanation :: string(),
-                    method      :: rabbit_framing:amqp_method_name()}).
-
--type(r(Kind) ::
-        r2(vhost(), Kind)).
--type(r2(VirtualHost, Kind) ::
-        r3(VirtualHost, Kind, rabbit_misc:resource_name())).
--type(r3(VirtualHost, Kind, Name) ::
-        #resource{virtual_host :: VirtualHost,
-                  kind         :: Kind,
-                  name         :: Name}).
-
 -type(listener() ::
         #listener{node     :: node(),
                   protocol :: atom(),
                   host     :: rabbit_networking:hostname(),
                   port     :: rabbit_networking:ip_port()}).
 
--type(amqqueue() ::
-        #amqqueue{name            :: rabbit_amqqueue:name(),
-                  durable         :: boolean(),
-                  auto_delete     :: boolean(),
-                  exclusive_owner :: rabbit_types:maybe(pid()),
-                  arguments       :: rabbit_framing:amqp_table(),
-                  pid             :: rabbit_types:maybe(pid()),
-                  slave_pids      :: [pid()],
-                  mirror_nodes    :: [node()] | 'undefined' | 'all'}).
-
-
 -type(connection() :: pid()).
 
 -type(protocol() :: rabbit_framing:protocol()).
 
--type(user() ::
-        #user{username     :: username(),
-              tags         :: [atom()],
-              auth_backend :: atom(),
-              impl         :: any()}).
-
--type(internal_user() ::
-        #internal_user{username      :: username(),
-                       password_hash :: password_hash(),
-                       tags          :: [atom()]}).
-
 -type(username() :: binary()).
 -type(password() :: binary()).
--type(password_hash() :: binary()).
 
 -type(ok(A) :: {'ok', A}).
 -type(error(A) :: {'error', A}).
