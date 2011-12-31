@@ -299,8 +299,7 @@ table_definitions() ->
       [{record_name, amqqueue},
        {attributes, record_info(fields, amqqueue)},
        {match, #amqqueue{name = queue_name_match(), _='_'}}]}]
-        ++ gm:table_definitions()
-        ++ mirrored_supervisor:table_definitions().
+        ++ gm:table_definitions().
 
 binding_match() ->
     #binding{source = exchange_name_match(),

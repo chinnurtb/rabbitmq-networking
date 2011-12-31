@@ -1,27 +1,20 @@
-TMPDIR ?= /tmp
 TARGET_DIR=~/rabbitmq
-SBIN_DIR=$TARGET_DIR/sbin
-MAN_DIR=$TARGET_DIR/man
+SBIN_DIR=$(TARGET_DIR)/sbin
+MAN_DIR=$(TARGET_DIR)/man
 
-RABBITMQ_NODENAME ?= rabbit
+RABBITMQ_NODENAME=rabbit
 RABBITMQ_SERVER_START_ARGS ?=
-RABBITMQ_MNESIA_DIR ?= $(TMPDIR)/rabbitmq-$(RABBITMQ_NODENAME)-mnesia
-RABBITMQ_PLUGINS_EXPAND_DIR ?= $(TMPDIR)/rabbitmq-$(RABBITMQ_NODENAME)-plugins-scratch
-RABBITMQ_LOG_BASE ?= $(TMPDIR)
+RABBITMQ_MNESIA_DIR=$(TARGET_DIR)/var/data/rabbitmq-$(RABBITMQ_NODENAME)-mnesia
+RABBITMQ_PLUGINS_EXPAND_DIR=$(TARGET_DIR)/tmp/rabbitmq-$(RABBITMQ_NODENAME)-plugins-scratch
 
 SOURCE_DIR=src
 EBIN_DIR=ebin
 INCLUDE_DIR=include
-DOCS_DIR=docs
 INCLUDES=$(wildcard $(INCLUDE_DIR)/*.hrl) $(INCLUDE_DIR)/rabbit_framing.hrl
 SOURCES=$(wildcard $(SOURCE_DIR)/*.erl) $(USAGES_ERL)
 BEAM_TARGETS=$(patsubst $(SOURCE_DIR)/%.erl, $(EBIN_DIR)/%.beam, $(SOURCES))
 TARGETS=$(EBIN_DIR)/rabbit.app $(INCLUDE_DIR)/rabbit_framing.hrl $(BEAM_TARGETS) plugins
 WEB_URL=http://www.rabbitmq.com/
-MANPAGES=$(patsubst %.xml, %.gz, $(wildcard $(DOCS_DIR)/*.[0-9].xml))
-WEB_MANPAGES=$(patsubst %.xml, %.man.xml, $(wildcard $(DOCS_DIR)/*.[0-9].xml) $(DOCS_DIR)/rabbitmq-service.xml)
-USAGES_XML=$(DOCS_DIR)/rabbitmqctl.1.xml $(DOCS_DIR)/rabbitmq-plugins.1.xml
-USAGES_ERL=$(foreach XML, $(USAGES_XML), $(call usage_xml_to_erl, $(XML)))
 QC_MODULES := rabbit_backing_queue_qc
 QC_TRIALS ?= 100
 
@@ -44,7 +37,6 @@ endif
 ERLC_OPTS=-I $(INCLUDE_DIR) -o $(EBIN_DIR) -Wall -v +debug_info $(call boolean_macro,$(USE_SPECS),use_specs) $(call boolean_macro,$(USE_PROPER_QC),use_proper_qc)
 
 VERSION=0.0.0
-PLUGINS_SRC_DIR?=$(shell [ -d "plugins-src" ] && echo "plugins-src" || echo )
 PLUGINS_DIR=plugins
 TARBALL_NAME=rabbitmq-server-$(VERSION)
 TARGET_SRC_DIR=dist/$(TARBALL_NAME)
@@ -52,14 +44,6 @@ TARGET_SRC_DIR=dist/$(TARBALL_NAME)
 ERL_CALL=erl_call -sname $(RABBITMQ_NODENAME) -e
 
 ERL_EBIN=erl -noinput -pa $(EBIN_DIR)
-
-define usage_xml_to_erl
-  $(subst __,_,$(patsubst $(DOCS_DIR)/rabbitmq%.1.xml, $(SOURCE_DIR)/rabbit_%_usage.erl, $(subst -,_,$(1))))
-endef
-
-define usage_dep
-  $(call usage_xml_to_erl, $(1)): $(1) $(DOCS_DIR)/usage.xsl
-endef
 
 define boolean_macro
 $(if $(filter true,$(1)),-D$(2))
@@ -121,10 +105,7 @@ $(BASIC_PLT): $(BEAM_TARGETS)
 clean:
 	rm -f $(EBIN_DIR)/*.beam
 	rm -f $(EBIN_DIR)/rabbit.app $(EBIN_DIR)/rabbit.boot $(EBIN_DIR)/rabbit.script $(EBIN_DIR)/rabbit.rel
-	rm -f $(PLUGINS_DIR)/*.ez
-	[ -d "$(PLUGINS_SRC_DIR)" ] && PLUGINS_SRC_DIR="" PRESERVE_CLONE_DIR=1 make -C $(PLUGINS_SRC_DIR) clean || true
 	rm -f $(SOURCE_DIR)/rabbit_framing_amqp_*.erl 
-	rm -f $(DOCS_DIR)/*.[0-9].gz $(DOCS_DIR)/*.man.xml $(DOCS_DIR)/*.erl $(USAGES_ERL)
 	rm -f $(RABBIT_PLT)
 
 cleandb:
@@ -206,26 +187,13 @@ stop-cover: all
 ########################################################################
 
 srcdist: distclean
-	cp -r ebin src include LICENSE LICENSE-MPL-RabbitMQ INSTALL README $(TARGET_SRC_DIR)
+	cp -r ebin src include README $(TARGET_SRC_DIR)
 	sed -i.save 's/%%VSN%%/$(VERSION)/' $(TARGET_SRC_DIR)/ebin/rabbit_app.in && rm -f $(TARGET_SRC_DIR)/ebin/rabbit_app.in.save
 
 	cp Makefile generate_app $(TARGET_SRC_DIR)
 
 	cp -r scripts $(TARGET_SRC_DIR)
-	cp -r $(DOCS_DIR) $(TARGET_SRC_DIR)
 	chmod 0755 $(TARGET_SRC_DIR)/scripts/*
-
-ifneq "$(PLUGINS_SRC_DIR)" ""
-	cp -r $(PLUGINS_SRC_DIR) $(TARGET_SRC_DIR)/plugins-src
-	rm $(TARGET_SRC_DIR)/LICENSE
-	cat packaging/common/LICENSE.head >> $(TARGET_SRC_DIR)/LICENSE
-	find $(PLUGINS_SRC_DIR)/licensing -name "license_info_*" -exec cat '{}' >> $(TARGET_SRC_DIR)/LICENSE \;
-	cat packaging/common/LICENSE.tail >> $(TARGET_SRC_DIR)/LICENSE
-	find $(PLUGINS_SRC_DIR)/licensing -name "LICENSE-*" -exec cp '{}' $(TARGET_SRC_DIR) \;
-	rm -rf $(TARGET_SRC_DIR)/licensing
-else
-	@echo No plugins source distribution found
-endif
 
 	(cd dist; tar -zchf $(TARBALL_NAME).tar.gz $(TARBALL_NAME))
 	(cd dist; zip -q -r $(TARBALL_NAME).zip $(TARBALL_NAME))
@@ -235,58 +203,15 @@ distclean: clean
 	rm -rf dist
 	find . -regex '.*\(~\|#\|\.swp\|\.dump\)' -exec rm {} \;
 
-# xmlto can not read from standard input, so we mess with a tmp file.
-%.gz: %.xml $(DOCS_DIR)/examples-to-end.xsl
-	xmlto --version | grep -E '^xmlto version 0\.0\.([0-9]|1[1-8])$$' >/dev/null || opt='--stringparam man.indent.verbatims=0' ; \
-	    xsltproc --novalid $(DOCS_DIR)/examples-to-end.xsl $< > $<.tmp && \
-	    xmlto -o $(DOCS_DIR) $$opt man $<.tmp && \
-	    gzip -f $(DOCS_DIR)/`basename $< .xml`
-	rm -f $<.tmp
-
-# Use tmp files rather than a pipeline so that we get meaningful errors
-# Do not fold the cp into previous line, it's there to stop the file being
-# generated but empty if we fail
-$(SOURCE_DIR)/%_usage.erl:
-	xsltproc --novalid --stringparam modulename "`basename $@ .erl`" \
-		$(DOCS_DIR)/usage.xsl $< > $@.tmp
-	sed -e 's/"/\\"/g' -e 's/%QUOTE%/"/g' $@.tmp > $@.tmp2
-	fold -s $@.tmp2 > $@.tmp3
-	mv $@.tmp3 $@
-	rm $@.tmp $@.tmp2
-
-# We rename the file before xmlto sees it since xmlto will use the name of
-# the file to make internal links.
-%.man.xml: %.xml $(DOCS_DIR)/html-to-website-xml.xsl
-	cp $< `basename $< .xml`.xml && \
-		xmlto xhtml-nochunks `basename $< .xml`.xml ; rm `basename $< .xml`.xml
-	cat `basename $< .xml`.html | \
-	    xsltproc --novalid $(DOCS_DIR)/remove-namespaces.xsl - | \
-		xsltproc --novalid --stringparam original `basename $<` $(DOCS_DIR)/html-to-website-xml.xsl - | \
-		xmllint --format - > $@
-	rm `basename $< .xml`.html
-
-docs_all: $(MANPAGES) $(WEB_MANPAGES)
-
-install: install_bin install_docs
+install: install_bin
 
 install_bin: all install_dirs
-	cp -r ebin include LICENSE* INSTALL $(TARGET_DIR)
+	cp -r ebin include $(TARGET_DIR)
 
 	chmod 0755 scripts/*
 	for script in rabbitmq-env rabbitmq-server rabbitmqctl rabbitmq-plugins; do \
 		cp scripts/$$script $(TARGET_DIR)/sbin; \
 		[ -e $(SBIN_DIR)/$$script ] || ln -s $(SCRIPTS_REL_PATH)/$$script $(SBIN_DIR)/$$script; \
-	done
-
-	mkdir -p $(TARGET_DIR)/$(PLUGINS_DIR)
-	[ -d "$(PLUGINS_DIR)" ] && cp $(PLUGINS_DIR)/*.ez $(PLUGINS_DIR)/README $(TARGET_DIR)/$(PLUGINS_DIR) || true
-
-install_docs: docs_all install_dirs
-	for section in 1 5; do \
-		mkdir -p $(MAN_DIR)/man$$section; \
-		for manpage in $(DOCS_DIR)/*.$$section.gz; do \
-			cp $$manpage $(MAN_DIR)/man$$section; \
-		done; \
 	done
 
 install_dirs:
@@ -298,8 +223,6 @@ install_dirs:
 	mkdir -p $(TARGET_DIR)/sbin
 	mkdir -p $(SBIN_DIR)
 	mkdir -p $(MAN_DIR)
-
-$(foreach XML,$(USAGES_XML),$(eval $(call usage_dep, $(XML))))
 
 # Note that all targets which depend on clean must have clean in their
 # name.  Also any target that doesn't depend on clean should not have
