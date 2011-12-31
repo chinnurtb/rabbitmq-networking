@@ -25,7 +25,7 @@
 
 %%---------------------------------------------------------------------------
 %% Boot steps.
--export([maybe_insert_default_data/0, recover/0]).
+-export([recover/0]).
 
 -rabbit_boot_step({pre_boot, [{description, "rabbit boot start"}]}).
 
@@ -61,13 +61,6 @@
                    [{description, "kernel ready"},
                     {requires,    external_infrastructure}]}).
 
--rabbit_boot_step({rabbit_node_monitor,
-                   [{description, "node monitor"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
-                                   [rabbit_node_monitor]}},
-                    {requires,    kernel_ready},
-                    {enables,     core_initialized}]}).
-
 -rabbit_boot_step({core_initialized,
                    [{description, "core initialized"},
                     {requires,    kernel_ready}]}).
@@ -76,10 +69,6 @@
                    [{mfa,         {rabbit_networking, boot, []}},
                     {requires,    core_initialized}]}).
 
--rabbit_boot_step({notify_cluster,
-                   [{description, "notify cluster nodes"},
-                    {mfa,         {rabbit_node_monitor, notify_cluster, []}},
-                    {requires,    networking}]}).
 
 %%---------------------------------------------------------------------------
 
@@ -107,7 +96,6 @@
 -spec(is_running/1 :: (node()) -> boolean()).
 -spec(environment/0 :: () -> [{atom() | term()}]).
 
--spec(maybe_insert_default_data/0 :: () -> 'ok').
 -spec(recover/0 :: () -> 'ok').
 
 -spec(start/2 :: ('normal',[]) ->
@@ -314,28 +302,6 @@ boot_error(Format, Args) ->
 
 recover() ->
     rabbit_binding:recover(rabbit_exchange:recover(), rabbit_amqqueue:start()).
-
-maybe_insert_default_data() ->
-    case rabbit_mnesia:is_db_empty() of
-        true -> insert_default_data();
-        false -> ok
-    end.
-
-insert_default_data() ->
-    {ok, DefaultUser} = application:get_env(default_user),
-    {ok, DefaultPass} = application:get_env(default_pass),
-    {ok, DefaultTags} = application:get_env(default_user_tags),
-    {ok, DefaultVHost} = application:get_env(default_vhost),
-    {ok, [DefaultConfigurePerm, DefaultWritePerm, DefaultReadPerm]} =
-        application:get_env(default_permissions),
-    ok = rabbit_vhost:add(DefaultVHost),
-    ok = rabbit_auth_backend_internal:add_user(DefaultUser, DefaultPass),
-    ok = rabbit_auth_backend_internal:set_tags(DefaultUser, DefaultTags),
-    ok = rabbit_auth_backend_internal:set_permissions(DefaultUser, DefaultVHost,
-                                                      DefaultConfigurePerm,
-                                                      DefaultWritePerm,
-                                                      DefaultReadPerm),
-    ok.
 
 %%---------------------------------------------------------------------------
 %% misc

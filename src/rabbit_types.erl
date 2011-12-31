@@ -26,7 +26,7 @@
               unencoded_content/0, encoded_content/0, message_properties/0,
               vhost/0, ctag/0, amqp_error/0, r/1, r2/2, r3/3, listener/0,
               binding/0, binding_source/0, binding_destination/0,
-              amqqueue/0, exchange/0,
+              amqqueue/0, 
               connection/0, protocol/0, user/0, internal_user/0,
               username/0, password/0, password_hash/0, ok/1, error/1,
               ok_or_error/1, ok_or_error2/2, ok_pid_or_error/0, channel_exit/0,
@@ -62,13 +62,6 @@
                  properties_bin        :: binary(),
                  payload_fragments_rev :: [binary()]}).
 -type(content() :: undecoded_content() | decoded_content()).
--type(msg_id() :: rabbit_guid:guid()).
--type(basic_message() ::
-        #basic_message{exchange_name  :: rabbit_exchange:name(),
-                       routing_keys   :: [rabbit_router:routing_key()],
-                       content        :: content(),
-                     id             :: msg_id(),
-                       is_persistent  :: boolean()}).
 -type(message() :: basic_message()).
 -type(delivery() ::
         #delivery{mandatory :: boolean(),
@@ -105,14 +98,7 @@
                   host     :: rabbit_networking:hostname(),
                   port     :: rabbit_networking:ip_port()}).
 
--type(binding_source() :: rabbit_exchange:name()).
--type(binding_destination() :: rabbit_amqqueue:name() | rabbit_exchange:name()).
 
--type(binding() ::
-        #binding{source      :: rabbit_exchange:name(),
-                 destination :: binding_destination(),
-                 key         :: rabbit_binding:key(),
-                 args        :: rabbit_framing:amqp_table()}).
 
 -type(amqqueue() ::
         #amqqueue{name            :: rabbit_amqqueue:name(),
@@ -124,12 +110,6 @@
                   slave_pids      :: [pid()],
                   mirror_nodes    :: [node()] | 'undefined' | 'all'}).
 
--type(exchange() ::
-        #exchange{name        :: rabbit_exchange:name(),
-                  type        :: rabbit_exchange:type(),
-                  durable     :: boolean(),
-                  auto_delete :: boolean(),
-                  arguments   :: rabbit_framing:amqp_table()}).
 
 -type(connection() :: pid()).
 

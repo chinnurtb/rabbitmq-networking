@@ -37,22 +37,15 @@
 
 start_link() ->
     {ok, SupPid} = supervisor2:start_link(?MODULE, []),
-    {ok, Collector} =
+    {ok, ClientPid} =
         supervisor2:start_child(
           SupPid,
-          {collector, {rabbit_queue_collector, start_link, []},
-           intrinsic, ?MAX_WAIT, worker, [rabbit_queue_collector]}),
-    {ok, ChannelSupSupPid} =
-        supervisor2:start_child(
-          SupPid,
-          {channel_sup_sup, {rabbit_channel_sup_sup, start_link, []},
-           intrinsic, infinity, supervisor, [rabbit_channel_sup_sup]}),
+          {client, {rabbit_client, start_link, []},
+           intrinsic, ?MAX_WAIT, worker, [rabbit_client]}),
     {ok, ReaderPid} =
         supervisor2:start_child(
           SupPid,
-          {reader, {rabbit_reader, start_link,
-                    [ChannelSupSupPid, Collector,
-                     rabbit_heartbeat:start_heartbeat_fun(SupPid)]},
+          {reader, {rabbit_reader, start_link, [ClientPid]},
            intrinsic, ?MAX_WAIT, worker, [rabbit_reader]}),
     {ok, SupPid, ReaderPid}.
 
@@ -63,3 +56,4 @@ reader(Pid) ->
 
 init([]) ->
     {ok, {{one_for_all, 0, 1}, []}}.
+

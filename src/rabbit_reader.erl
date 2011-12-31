@@ -18,7 +18,7 @@
 -include("rabbit_framing.hrl").
 -include("rabbit.hrl").
 
--export([start_link/3, info_keys/0, info/1, info/2, force_event_refresh/1,
+-export([start_link/1, info_keys/0, info/1, info/2, force_event_refresh/1,
          shutdown/2]).
 
 -export([system_continue/3, system_terminate/4, system_code_change/4]).
@@ -38,7 +38,7 @@
 %%--------------------------------------------------------------------------
 
 -record(v1, {parent, sock, connection, callback, recv_len, pending_recv,
-             connection_state, queue_collector, heartbeater, stats_timer,
+             connection_state, queue_collector,  stats_timer,
              channel_sup_sup_pid, start_heartbeat_fun, buf, buf_len,
              auth_mechanism, auth_state}).
 
@@ -64,7 +64,7 @@
 
 -ifdef(use_specs).
 
--spec(start_link/3 :: (pid(), pid(), rabbit_heartbeat:start_heartbeat_fun()) ->
+-spec(start_link/1 :: (pid()) ->
                            rabbit_types:ok(pid())).
 -spec(info_keys/0 :: () -> rabbit_types:info_keys()).
 -spec(info/1 :: (pid()) -> rabbit_types:infos()).
@@ -98,20 +98,18 @@
 
 %%--------------------------------------------------------------------------
 
-start_link(ChannelSupSupPid, Collector, StartHeartbeatFun) ->
-    {ok, proc_lib:spawn_link(?MODULE, init, [self(), ChannelSupSupPid,
-                                             Collector, StartHeartbeatFun])}.
+start_link(ClientPid) ->
+    {ok, proc_lib:spawn_link(?MODULE, init, [self(), ClientPid])}.
 
 shutdown(Pid, Explanation) ->
     gen_server:call(Pid, {shutdown, Explanation}, infinity).
 
-init(Parent, ChannelSupSupPid, Collector, StartHeartbeatFun) ->
+init(Parent, ClientPid) ->
     Deb = sys:debug_options([]),
     receive
         {go, Sock, SockTransform} ->
             start_connection(
-              Parent, ChannelSupSupPid, Collector, StartHeartbeatFun, Deb, Sock,
-              SockTransform)
+              Parent, ChannelSupSupPid,Deb, Sock, SockTransform)
     end.
 
 system_continue(Parent, Deb, State) ->
@@ -189,8 +187,7 @@ socket_op(Sock, Fun) ->
                            exit(normal)
     end.
 
-start_connection(Parent, ChannelSupSupPid, Collector, StartHeartbeatFun, Deb,
-                 Sock, SockTransform) ->
+start_connection(Parent, ClientPid, Deb, Sock, SockTransform) ->
     process_flag(trap_exit, true),
     {PeerAddress, PeerPort} = socket_op(Sock, fun rabbit_net:peername/1),
     PeerAddressS = rabbit_misc:ntoab(PeerAddress),
@@ -213,10 +210,8 @@ start_connection(Parent, ChannelSupSupPid, Collector, StartHeartbeatFun, Deb,
                 recv_len            = 0,
                 pending_recv        = false,
                 connection_state    = pre_init,
-                queue_collector     = Collector,
                 heartbeater         = none,
-                channel_sup_sup_pid = ChannelSupSupPid,
-                start_heartbeat_fun = StartHeartbeatFun,
+                clientpid = clientpid,
                 buf                 = [],
                 buf_len             = 0,
                 auth_mechanism      = none,
@@ -660,35 +655,6 @@ handle_method0(#'connection.start_ok'{mechanism = Mechanism,
 handle_method0(#'connection.secure_ok'{response = Response},
                State = #v1{connection_state = securing}) ->
     auth_phase(Response, State);
-
-handle_method0(#'connection.tune_ok'{frame_max = FrameMax,
-                                     heartbeat = ClientHeartbeat},
-               State = #v1{connection_state = tuning,
-                           connection = Connection,
-                           sock = Sock,
-                           start_heartbeat_fun = SHF}) ->
-    ServerFrameMax = server_frame_max(),
-    if FrameMax /= 0 andalso FrameMax < ?FRAME_MIN_SIZE ->
-            rabbit_misc:protocol_error(
-              not_allowed, "frame_max=~w < ~w min size",
-              [FrameMax, ?FRAME_MIN_SIZE]);
-       ServerFrameMax /= 0 andalso FrameMax > ServerFrameMax ->
-            rabbit_misc:protocol_error(
-              not_allowed, "frame_max=~w > ~w max size",
-              [FrameMax, ServerFrameMax]);
-       true ->
-            Frame = rabbit_binary_generator:build_heartbeat_frame(),
-            SendFun = fun() -> catch rabbit_net:send(Sock, Frame) end,
-            Parent = self(),
-            ReceiveFun = fun() -> Parent ! timeout end,
-            Heartbeater = SHF(Sock, ClientHeartbeat, SendFun,
-                              ClientHeartbeat, ReceiveFun),
-            State#v1{connection_state = opening,
-                     connection = Connection#connection{
-                                    timeout_sec = ClientHeartbeat,
-                                    frame_max = FrameMax},
-                     heartbeater = Heartbeater}
-    end;
 
 handle_method0(#'connection.open'{virtual_host = VHostPath},
                State = #v1{connection_state = opening,
