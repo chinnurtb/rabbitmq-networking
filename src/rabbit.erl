@@ -18,27 +18,16 @@
 
 -behaviour(application).
 
--export([maybe_hipe_compile/0, prepare/0, start/0, stop/0, stop_and_halt/0,
-         status/0, is_running/0, is_running/1, environment/0,
-         rotate_logs/1, force_event_refresh/0]).
+-export([start/0, stop/0, stop_and_halt/0,
+         status/0, is_running/0, is_running/1, environment/0]).
 
 -export([start/2, stop/1]).
 
--export([log_location/1]). %% for testing
-
 %%---------------------------------------------------------------------------
 %% Boot steps.
--export([maybe_insert_default_data/0, boot_delegate/0, recover/0]).
+-export([maybe_insert_default_data/0, recover/0]).
 
 -rabbit_boot_step({pre_boot, [{description, "rabbit boot start"}]}).
-
--rabbit_boot_step({codec_correctness_check,
-                   [{description, "codec correctness check"},
-                    {mfa,         {rabbit_binary_generator,
-                                   check_empty_content_body_frame_size,
-                                   []}},
-                    {requires,    pre_boot},
-                    {enables,     external_infrastructure}]}).
 
 -rabbit_boot_step({database,
                    [{mfa,         {rabbit_mnesia, init, []}},
@@ -61,13 +50,6 @@
 -rabbit_boot_step({external_infrastructure,
                    [{description, "external infrastructure ready"}]}).
 
--rabbit_boot_step({rabbit_registry,
-                   [{description, "plugin registry"},
-                    {mfa,         {rabbit_sup, start_child,
-                                   [rabbit_registry]}},
-                    {requires,    external_infrastructure},
-                    {enables,     kernel_ready}]}).
-
 -rabbit_boot_step({rabbit_log,
                    [{description, "logging server"},
                     {mfa,         {rabbit_sup, start_restartable_child,
@@ -75,42 +57,9 @@
                     {requires,    external_infrastructure},
                     {enables,     kernel_ready}]}).
 
--rabbit_boot_step({rabbit_event,
-                   [{description, "statistics event manager"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
-                                   [rabbit_event]}},
-                    {requires,    external_infrastructure},
-                    {enables,     kernel_ready}]}).
-
 -rabbit_boot_step({kernel_ready,
                    [{description, "kernel ready"},
                     {requires,    external_infrastructure}]}).
-
--rabbit_boot_step({rabbit_alarm,
-                   [{description, "alarm handler"},
-                    {mfa,         {rabbit_alarm, start, []}},
-                    {requires,    kernel_ready},
-                    {enables,     core_initialized}]}).
-
--rabbit_boot_step({rabbit_memory_monitor,
-                   [{description, "memory monitor"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
-                                   [rabbit_memory_monitor]}},
-                    {requires,    rabbit_alarm},
-                    {enables,     core_initialized}]}).
-
--rabbit_boot_step({guid_generator,
-                   [{description, "guid generator"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
-                                   [rabbit_guid]}},
-                    {requires,    kernel_ready},
-                    {enables,     core_initialized}]}).
-
--rabbit_boot_step({delegate_sup,
-                   [{description, "cluster delegate"},
-                    {mfa,         {rabbit, boot_delegate, []}},
-                    {requires,    kernel_ready},
-                    {enables,     core_initialized}]}).
 
 -rabbit_boot_step({rabbit_node_monitor,
                    [{description, "node monitor"},
@@ -123,47 +72,9 @@
                    [{description, "core initialized"},
                     {requires,    kernel_ready}]}).
 
--rabbit_boot_step({empty_db_check,
-                   [{description, "empty DB check"},
-                    {mfa,         {?MODULE, maybe_insert_default_data, []}},
-                    {requires,    core_initialized},
-                    {enables,     routing_ready}]}).
-
--rabbit_boot_step({recovery,
-                   [{description, "exchange, queue and binding recovery"},
-                    {mfa,         {rabbit, recover, []}},
-                    {requires,    empty_db_check},
-                    {enables,     routing_ready}]}).
-
--rabbit_boot_step({mirror_queue_slave_sup,
-                   [{description, "mirror queue slave sup"},
-                    {mfa,         {rabbit_mirror_queue_slave_sup, start, []}},
-                    {requires,    recovery},
-                    {enables,     routing_ready}]}).
-
--rabbit_boot_step({mirrored_queues,
-                   [{description, "adding mirrors to queues"},
-                    {mfa,         {rabbit_mirror_queue_misc, on_node_up, []}},
-                    {requires,    mirror_queue_slave_sup},
-                    {enables,     routing_ready}]}).
-
--rabbit_boot_step({routing_ready,
-                   [{description, "message delivery logic ready"},
-                    {requires,    core_initialized}]}).
-
--rabbit_boot_step({log_relay,
-                   [{description, "error log relay"},
-                    {mfa,         {rabbit_error_logger, boot, []}},
-                    {requires,    routing_ready},
-                    {enables,     networking}]}).
-
--rabbit_boot_step({direct_client,
-                   [{mfa,        {rabbit_direct, boot, []}},
-                    {requires,   log_relay}]}).
-
 -rabbit_boot_step({networking,
                    [{mfa,         {rabbit_networking, boot, []}},
-                    {requires,    log_relay}]}).
+                    {requires,    core_initialized}]}).
 
 -rabbit_boot_step({notify_cluster,
                    [{description, "notify cluster nodes"},
@@ -175,44 +86,17 @@
 -include("rabbit_framing.hrl").
 -include("rabbit.hrl").
 
--define(APPS, [os_mon, mnesia, rabbit]).
-
-%% see bug 24513 for how this list was created
--define(HIPE_WORTHY,
-        [rabbit_reader, rabbit_channel, gen_server2,
-         rabbit_exchange, rabbit_command_assembler, rabbit_framing_amqp_0_9_1,
-         rabbit_basic, rabbit_event, lists, queue, priority_queue,
-         rabbit_router, rabbit_trace, rabbit_misc, rabbit_binary_parser,
-         rabbit_exchange_type_direct, rabbit_guid, rabbit_net,
-         rabbit_amqqueue_process, rabbit_variable_queue,
-         rabbit_binary_generator, rabbit_writer, delegate, gb_sets, lqueue,
-         sets, orddict, rabbit_amqqueue, rabbit_limiter, gb_trees,
-         rabbit_queue_index, gen, dict, ordsets, file_handle_cache,
-         rabbit_msg_store, array, rabbit_msg_store_ets_index, rabbit_msg_file,
-         rabbit_exchange_type_fanout, rabbit_exchange_type_topic, mnesia,
-         mnesia_lib, rpc, mnesia_tm, qlc, sofs, proplists]).
-
-%% HiPE compilation uses multiple cores anyway, but some bits are
-%% IO-bound so we can go faster if we parallelise a bit more. In
-%% practice 2 processes seems just as fast as any other number > 1,
-%% and keeps the progress bar realistic-ish.
--define(HIPE_PROCESSES, 2).
+-define(APPS, [sasl, os_mon, mnesia, rabbit]).
 
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
 
--type(file_suffix() :: binary()).
 %% this really should be an abstract type
--type(log_location() :: 'tty' | 'undefined' | file:filename()).
 
--spec(maybe_hipe_compile/0 :: () -> 'ok').
--spec(prepare/0 :: () -> 'ok').
 -spec(start/0 :: () -> 'ok').
 -spec(stop/0 :: () -> 'ok').
 -spec(stop_and_halt/0 :: () -> no_return()).
--spec(rotate_logs/1 :: (file_suffix()) -> rabbit_types:ok_or_error(any())).
--spec(force_event_refresh/0 :: () -> 'ok').
 -spec(status/0 ::
         () -> [{pid, integer()} |
                {running_applications, [{atom(), string(), string()}]} |
@@ -222,10 +106,8 @@
 -spec(is_running/0 :: () -> boolean()).
 -spec(is_running/1 :: (node()) -> boolean()).
 -spec(environment/0 :: () -> [{atom() | term()}]).
--spec(log_location/1 :: ('sasl' | 'kernel') -> log_location()).
 
 -spec(maybe_insert_default_data/0 :: () -> 'ok').
--spec(boot_delegate/0 :: () -> 'ok').
 -spec(recover/0 :: () -> 'ok').
 
 -spec(start/2 :: ('normal',[]) ->
@@ -240,59 +122,8 @@
 
 %%----------------------------------------------------------------------------
 
-maybe_hipe_compile() ->
-    {ok, Want} = application:get_env(rabbit, hipe_compile),
-    Can = code:which(hipe) =/= non_existing,
-    case {Want, Can} of
-        {true,  true}  -> hipe_compile();
-        {true,  false} -> io:format("Not HiPE compiling: HiPE not found in "
-                                    "this Erlang installation.~n");
-        {false, _}     -> ok
-    end.
-
-hipe_compile() ->
-    Count = length(?HIPE_WORTHY),
-    io:format("HiPE compiling:  |~s|~n                 |",
-              [string:copies("-", Count)]),
-    T1 = erlang:now(),
-    PidMRefs = [spawn_monitor(fun () -> [begin
-                                             {ok, M} = hipe:c(M, [o3]),
-                                             io:format("#")
-                                         end || M <- Ms]
-                              end) ||
-                   Ms <- split(?HIPE_WORTHY, ?HIPE_PROCESSES)],
-    [receive
-         {'DOWN', MRef, process, _, normal} -> ok;
-         {'DOWN', MRef, process, _, Reason} -> exit(Reason)
-     end || {_Pid, MRef} <- PidMRefs],
-    T2 = erlang:now(),
-    io:format("|~n~nCompiled ~B modules in ~Bs~n",
-              [Count, timer:now_diff(T2, T1) div 1000000]).
-
-split(L, N) -> split0(L, [[] || _ <- lists:seq(1, N)]).
-
-split0([],       Ls)       -> Ls;
-split0([I | Is], [L | Ls]) -> split0(Is, Ls ++ [[I | L]]).
-
-prepare() ->
-    ok = ensure_working_log_handlers(),
-    ok = rabbit_upgrade:maybe_upgrade_mnesia().
-
 start() ->
-    try
-        %% prepare/1 ends up looking at the rabbit app's env, so it
-        %% needs to be loaded, but during the tests, it may end up
-        %% getting loaded twice, so guard against that
-        case application:load(rabbit) of
-            ok                                -> ok;
-            {error, {already_loaded, rabbit}} -> ok
-        end,
-        ok = prepare(),
-        ok = rabbit_misc:start_applications(application_load_order())
-    after
-        %%give the error loggers some time to catch up
-        timer:sleep(100)
-    end.
+	rabbit_misc:start_applications(application_load_order()).
 
 stop() ->
     rabbit_log:info("Stopping Rabbit~n"),
@@ -312,13 +143,7 @@ status() ->
      {running_applications, application:which_applications(infinity)},
      {os, os:type()},
      {erlang_version, erlang:system_info(system_version)},
-     {memory, erlang:memory()}] ++
-    rabbit_misc:filter_exit_map(
-        fun ({Key, {M, F, A}}) -> {Key, erlang:apply(M, F, A)} end,
-        [{vm_memory_high_watermark, {vm_memory_monitor,
-                                     get_vm_memory_high_watermark, []}},
-         {vm_memory_limit,          {vm_memory_monitor,
-                                     get_memory_limit, []}}]).
+     {memory, erlang:memory()}].
 
 is_running() -> is_running(node()).
 
@@ -332,16 +157,6 @@ environment() ->
     lists:keysort(
       1, [P || P = {K, _} <- application:get_all_env(rabbit),
                K =/= default_pass]).
-
-rotate_logs(BinarySuffix) ->
-    Suffix = binary_to_list(BinarySuffix),
-    rabbit_misc:local_info_msg("Rotating logs with suffix '~s'~n", [Suffix]),
-    log_rotation_result(rotate_logs(log_location(kernel),
-                                    Suffix,
-                                    rabbit_error_logger_file_h),
-                        rotate_logs(log_location(sasl),
-                                    Suffix,
-                                    rabbit_sasl_report_file_h)).
 
 %%--------------------------------------------------------------------
 
@@ -496,12 +311,6 @@ boot_error(Format, Args) ->
     timer:sleep(1000),
     exit({?MODULE, failure_during_boot}).
 
-%%---------------------------------------------------------------------------
-%% boot step functions
-
-boot_delegate() ->
-    {ok, Count} = application:get_env(rabbit, delegate_count),
-    rabbit_sup:start_child(delegate_sup, [Count]).
 
 recover() ->
     rabbit_binding:recover(rabbit_exchange:recover(), rabbit_amqqueue:start()).
@@ -527,88 +336,6 @@ insert_default_data() ->
                                                       DefaultWritePerm,
                                                       DefaultReadPerm),
     ok.
-
-%%---------------------------------------------------------------------------
-%% logging
-
-ensure_working_log_handlers() ->
-    Handlers = gen_event:which_handlers(error_logger),
-    ok = ensure_working_log_handler(error_logger_tty_h,
-                                    rabbit_error_logger_file_h,
-                                    error_logger_tty_h,
-                                    log_location(kernel),
-                                    Handlers),
-
-    ok = ensure_working_log_handler(sasl_report_tty_h,
-                                    rabbit_sasl_report_file_h,
-                                    sasl_report_tty_h,
-                                    log_location(sasl),
-                                    Handlers),
-    ok.
-
-ensure_working_log_handler(OldHandler, NewHandler, TTYHandler,
-                           LogLocation, Handlers) ->
-    case LogLocation of
-        undefined -> ok;
-        tty       -> case lists:member(TTYHandler, Handlers) of
-                         true  -> ok;
-                         false ->
-                             throw({error, {cannot_log_to_tty,
-                                            TTYHandler, not_installed}})
-                     end;
-        _         -> case lists:member(NewHandler, Handlers) of
-                         true  -> ok;
-                         false -> case rotate_logs(LogLocation, "",
-                                                   OldHandler, NewHandler) of
-                                      ok -> ok;
-                                      {error, Reason} ->
-                                          throw({error, {cannot_log_to_file,
-                                                         LogLocation, Reason}})
-                                  end
-                     end
-    end.
-
-log_location(Type) ->
-    case application:get_env(rabbit, case Type of
-                                         kernel -> error_logger;
-                                         sasl   -> sasl_error_logger
-                                     end) of
-        {ok, {file, File}} -> File;
-        {ok, false}        -> undefined;
-        {ok, tty}          -> tty;
-        {ok, silent}       -> undefined;
-        {ok, Bad}          -> throw({error, {cannot_log_to_file, Bad}});
-        _                  -> undefined
-    end.
-
-rotate_logs(File, Suffix, Handler) ->
-    rotate_logs(File, Suffix, Handler, Handler).
-
-rotate_logs(File, Suffix, OldHandler, NewHandler) ->
-    case File of
-        undefined -> ok;
-        tty       -> ok;
-        _         -> gen_event:swap_handler(
-                       error_logger,
-                       {OldHandler, swap},
-                       {NewHandler, {File, Suffix}})
-    end.
-
-log_rotation_result({error, MainLogError}, {error, SaslLogError}) ->
-    {error, {{cannot_rotate_main_logs, MainLogError},
-             {cannot_rotate_sasl_logs, SaslLogError}}};
-log_rotation_result({error, MainLogError}, ok) ->
-    {error, {cannot_rotate_main_logs, MainLogError}};
-log_rotation_result(ok, {error, SaslLogError}) ->
-    {error, {cannot_rotate_sasl_logs, SaslLogError}};
-log_rotation_result(ok, ok) ->
-    ok.
-
-force_event_refresh() ->
-    rabbit_direct:force_event_refresh(),
-    rabbit_networking:force_connection_event_refresh(),
-    rabbit_channel:force_event_refresh(),
-    rabbit_amqqueue:force_event_refresh().
 
 %%---------------------------------------------------------------------------
 %% misc
@@ -646,8 +373,6 @@ print_banner() ->
                 {"home dir",       home_dir()},
                 {"config file(s)", config_files()},
                 {"cookie hash",    rabbit_misc:cookie_hash()},
-                {"log",            log_location(kernel)},
-                {"sasl log",       log_location(sasl)},
                 {"database dir",   rabbit_mnesia:dir()},
                 {"erlang version", erlang:system_info(version)}],
     DescrLen = 1 + lists:max([length(K) || {K, _V} <- Settings]),

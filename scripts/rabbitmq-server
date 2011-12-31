@@ -17,11 +17,11 @@
 
 SERVER_ERL_ARGS="+K true +A30 +P 1048576 \
 -kernel inet_default_connect_options [{nodelay,true}]"
-CONFIG_FILE=/etc/rabbitmq/rabbitmq
-LOG_BASE=/var/log/rabbitmq
-MNESIA_BASE=/var/lib/rabbitmq/mnesia
+CONFIG_FILE=etc/rabbitmq/rabbitmq
+LOG_BASE=var/log/rabbitmq
+MNESIA_BASE=var/lib/rabbitmq/mnesia
 SERVER_START_ARGS=
-ENABLED_PLUGINS_FILE=/etc/rabbitmq/enabled_plugins
+ENABLED_PLUGINS_FILE=etc/rabbitmq/enabled_plugins
 
 . `dirname $0`/rabbitmq-env
 
@@ -75,24 +75,8 @@ case "$(uname -s)" in
 esac
 
 RABBITMQ_EBIN_ROOT="${RABBITMQ_HOME}/ebin"
-if [ "x" = "x$RABBITMQ_NODE_ONLY" ]; then
-    if erl \
-	-pa "$RABBITMQ_EBIN_ROOT" \
-	-noinput \
-	-hidden \
-	-s rabbit_prelaunch \
-	-sname rabbitmqprelaunch$$ \
-	-extra "$RABBITMQ_ENABLED_PLUGINS_FILE" "$RABBITMQ_PLUGINS_DIR" "${RABBITMQ_PLUGINS_EXPAND_DIR}" "${RABBITMQ_NODENAME}"
-    then
-	RABBITMQ_BOOT_FILE="${RABBITMQ_PLUGINS_EXPAND_DIR}/rabbit"
-	RABBITMQ_EBIN_PATH=""
-    else
-	exit 1
-    fi
-else
-    RABBITMQ_BOOT_FILE=start_sasl
-    RABBITMQ_EBIN_PATH="-pa ${RABBITMQ_EBIN_ROOT}"
-fi
+RABBITMQ_EBIN_PATH="-pa ${RABBITMQ_EBIN_ROOT}"
+
 RABBITMQ_CONFIG_ARG=
 [ -f "${RABBITMQ_CONFIG_FILE}.config" ] && RABBITMQ_CONFIG_ARG="-config ${RABBITMQ_CONFIG_FILE}"
 
@@ -108,7 +92,6 @@ exec erl \
     ${RABBITMQ_EBIN_PATH} \
     ${RABBITMQ_START_RABBIT} \
     -sname ${RABBITMQ_NODENAME} \
-    -boot ${RABBITMQ_BOOT_FILE} \
     ${RABBITMQ_CONFIG_ARG} \
     +W w \
     ${RABBITMQ_SERVER_ERL_ARGS} \
@@ -120,6 +103,8 @@ exec erl \
     -os_mon start_cpu_sup true \
     -os_mon start_disksup false \
     -os_mon start_memsup false \
+	-s observer start \
+	-s rabbit start \
     -mnesia dir "\"${RABBITMQ_MNESIA_DIR}\"" \
     ${RABBITMQ_SERVER_START_ARGS} \
     "$@"
