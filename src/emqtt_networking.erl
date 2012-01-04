@@ -14,9 +14,9 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_networking).
+-module(emqtt_networking).
 
--export([boot/0, start/0, start_tcp_listener/1, start_ssl_listener/2,
+-export([boot/0, start/0, start_tcp_listener/1, 
          stop_tcp_listener/1, on_node_down/1, active_listeners/0,
          node_listeners/1, connections/0, connection_info_keys/0,
          connection_info/1, connection_info/2,
@@ -24,16 +24,15 @@
          close_connection/2, force_connection_event_refresh/0]).
 
 %%used by TCP-based transports, e.g. STOMP adapter
--export([check_tcp_listener_address/2,
-         ensure_ssl/0, ssl_transform_fun/1]).
+-export([check_tcp_listener_address/2]).
 
 -export([tcp_listener_started/3, tcp_listener_stopped/3,
-         start_client/1, start_ssl_client/2]).
+         start_client/1]).
 
 %% Internal
 -export([connections_local/0]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 -include_lib("kernel/include/inet.hrl").
 
 -define(SSL_TIMEOUT, 5). %% seconds
@@ -56,41 +55,30 @@
 
 -spec(start/0 :: () -> 'ok').
 -spec(start_tcp_listener/1 :: (listener_config()) -> 'ok').
--spec(start_ssl_listener/2 ::
-        (listener_config(), rabbit_types:infos()) -> 'ok').
 -spec(stop_tcp_listener/1 :: (listener_config()) -> 'ok').
--spec(active_listeners/0 :: () -> [rabbit_types:listener()]).
--spec(node_listeners/1 :: (node()) -> [rabbit_types:listener()]).
--spec(connections/0 :: () -> [rabbit_types:connection()]).
--spec(connections_local/0 :: () -> [rabbit_types:connection()]).
--spec(connection_info_keys/0 :: () -> rabbit_types:info_keys()).
+-spec(active_listeners/0 :: () -> [emqtt_types:listener()]).
+-spec(node_listeners/1 :: (node()) -> [emqtt_types:listener()]).
+-spec(connections/0 :: () -> [emqtt_types:connection()]).
+-spec(connections_local/0 :: () -> [emqtt_types:connection()]).
+-spec(connection_info_keys/0 :: () -> emqtt_types:info_keys()).
 -spec(connection_info/1 ::
-        (rabbit_types:connection()) -> rabbit_types:infos()).
+        (emqtt_types:connection()) -> emqtt_types:infos()).
 -spec(connection_info/2 ::
-        (rabbit_types:connection(), rabbit_types:info_keys())
-        -> rabbit_types:infos()).
--spec(connection_info_all/0 :: () -> [rabbit_types:infos()]).
+        (emqtt_types:connection(), emqtt_types:info_keys())
+        -> emqtt_types:infos()).
+-spec(connection_info_all/0 :: () -> [emqtt_types:infos()]).
 -spec(connection_info_all/1 ::
-        (rabbit_types:info_keys()) -> [rabbit_types:infos()]).
+        (emqtt_types:info_keys()) -> [emqtt_types:infos()]).
 -spec(close_connection/2 :: (pid(), string()) -> 'ok').
 -spec(force_connection_event_refresh/0 :: () -> 'ok').
 
 -spec(on_node_down/1 :: (node()) -> 'ok').
 -spec(check_tcp_listener_address/2 :: (atom(), listener_config())
         -> [{inet:ip_address(), ip_port(), family(), atom()}]).
--spec(ensure_ssl/0 :: () -> rabbit_types:infos()).
--spec(ssl_transform_fun/1 ::
-        (rabbit_types:infos())
-        -> fun ((rabbit_net:socket())
-                -> rabbit_types:ok_or_error(#ssl_socket{}))).
 
 -spec(boot/0 :: () -> 'ok').
--spec(start_client/1 ::
-	(port() | #ssl_socket{ssl::{'sslsocket',_,_}}) ->
-			     atom() | pid() | port() | {atom(),atom()}).
--spec(start_ssl_client/2 ::
-	(_,port() | #ssl_socket{ssl::{'sslsocket',_,_}}) ->
-				 atom() | pid() | port() | {atom(),atom()}).
+-spec(start_client/1 :: ( port() ) -> 
+	atom() | pid() | port() | {atom(),atom()}).
 -spec(tcp_listener_started/3 ::
 	(_,
          string() |
@@ -112,26 +100,15 @@
 
 boot() ->
     ok = start(),
-    ok = boot_tcp(),
-    ok = boot_ssl().
+    ok = boot_tcp().
 
 boot_tcp() ->
     {ok, TcpListeners} = application:get_env(tcp_listeners),
     [ok = start_tcp_listener(Listener) || Listener <- TcpListeners],
     ok.
 
-boot_ssl() ->
-    case application:get_env(ssl_listeners) of
-        {ok, []} ->
-            ok;
-        {ok, SslListeners} ->
-            [start_ssl_listener(Listener, ensure_ssl())
-             || Listener <- SslListeners],
-            ok
-    end.
-
 start() ->
-	mnesia:create_table(rabbit_listener, [
+	mnesia:create_table(emqtt_listener, [
 		{ram_copies, [node()]},
 		{record_name, listener},
 		{attributes, record_info(fields, listener)},
@@ -139,12 +116,12 @@ start() ->
 		{match, #listener{_='_'}}
 	]),
     {ok,_} = supervisor2:start_child(
-               rabbit_sup,
-               {rabbit_tcp_client_sup,
-                {rabbit_client_sup, start_link,
-                 [{local, rabbit_tcp_client_sup},
-                  {rabbit_connection_sup,start_link,[]}]},
-                transient, infinity, supervisor, [rabbit_client_sup]}),
+               emqtt_sup,
+               {emqtt_tcp_client_sup,
+                {emqtt_client_sup, start_link,
+                 [{local, emqtt_tcp_client_sup},
+                  {emqtt_connection_sup,start_link,[]}]},
+                transient, infinity, supervisor, [emqtt_client_sup]}),
     ok.
 
 %% inet_parse:address takes care of ip string, like "0.0.0.0"
@@ -180,34 +157,6 @@ resolve_family({_,_,_,_,_,_,_,_}, auto) -> inet6;
 resolve_family(IP,                auto) -> throw({error, {strange_family, IP}});
 resolve_family(_,                 F)    -> F.
 
-ensure_ssl() ->
-    ok = rabbit_misc:start_applications([crypto, public_key, ssl]),
-    {ok, SslOptsConfig} = application:get_env(rabbit, ssl_options),
-
-    % unknown_ca errors are silently ignored prior to R14B unless we
-    % supply this verify_fun - remove when at least R14B is required
-    case proplists:get_value(verify, SslOptsConfig, verify_none) of
-        verify_none -> SslOptsConfig;
-        verify_peer -> [{verify_fun, fun([])    -> true;
-                                        ([_|_]) -> false
-                                     end}
-                        | SslOptsConfig]
-    end.
-
-ssl_transform_fun(SslOpts) ->
-    fun (Sock) ->
-            case catch ssl:ssl_accept(Sock, SslOpts, ?SSL_TIMEOUT * 1000) of
-                {ok, SslSock} ->
-                    rabbit_log:info("upgraded TCP connection ~p to SSL~n",
-                                    [self()]),
-                    {ok, #ssl_socket{tcp = Sock, ssl = SslSock}};
-                {error, Reason} ->
-                    {error, {ssl_upgrade_error, Reason}};
-                {'EXIT', Reason} ->
-                    {error, {ssl_upgrade_failure, Reason}}
-            end
-    end.
-
 check_tcp_listener_address(NamePrefix, Port) when is_integer(Port) ->
     check_tcp_listener_address_auto(NamePrefix, Port);
 
@@ -226,7 +175,7 @@ check_tcp_listener_address(NamePrefix, {Host, Port, Family0}) ->
                throw({error, {invalid_port, Port}})
     end,
     [{IPAddress, Port, Family,
-      rabbit_misc:tcp_name(NamePrefix, IPAddress, Port)} ||
+      emqtt_misc:tcp_name(NamePrefix, IPAddress, Port)} ||
         {IPAddress, Family} <- getaddr(Host, Family0)].
 
 check_tcp_listener_address_auto(NamePrefix, Port) ->
@@ -234,21 +183,17 @@ check_tcp_listener_address_auto(NamePrefix, Port) ->
                      Listener <- port_to_listeners(Port)]).
 
 start_tcp_listener(Listener) ->
-    start_listener(Listener, amqp, "TCP Listener",
+    start_listener(Listener, mqtt, "TCP Listener",
                    {?MODULE, start_client, []}).
-
-start_ssl_listener(Listener, SslOpts) ->
-    start_listener(Listener, 'amqp/ssl', "SSL Listener",
-                   {?MODULE, start_ssl_client, [SslOpts]}).
 
 start_listener(Listener, Protocol, Label, OnConnect) ->
     [start_listener0(Spec, Protocol, Label, OnConnect) ||
-        Spec <- check_tcp_listener_address(rabbit_tcp_listener_sup, Listener)],
+        Spec <- check_tcp_listener_address(emqtt_tcp_listener_sup, Listener)],
     ok.
 
 start_listener0({IPAddress, Port, Family, Name}, Protocol, Label, OnConnect) ->
     {ok,_} = supervisor:start_child(
-               rabbit_sup,
+               emqtt_sup,
                {Name,
                 {tcp_listener_sup, start_link,
                  [IPAddress, Port, [Family | tcp_opts()],
@@ -259,20 +204,20 @@ start_listener0({IPAddress, Port, Family, Name}, Protocol, Label, OnConnect) ->
 
 stop_tcp_listener(Listener) ->
     [stop_tcp_listener0(Spec) ||
-        Spec <- check_tcp_listener_address(rabbit_tcp_listener_sup, Listener)],
+        Spec <- check_tcp_listener_address(emqtt_tcp_listener_sup, Listener)],
     ok.
 
 stop_tcp_listener0({IPAddress, Port, _Family, Name}) ->
-    Name = rabbit_misc:tcp_name(rabbit_tcp_listener_sup, IPAddress, Port),
-    ok = supervisor:terminate_child(rabbit_sup, Name),
-    ok = supervisor:delete_child(rabbit_sup, Name).
+    Name = emqtt_misc:tcp_name(emqtt_tcp_listener_sup, IPAddress, Port),
+    ok = supervisor:terminate_child(emqtt_sup, Name),
+    ok = supervisor:delete_child(emqtt_sup, Name).
 
 tcp_listener_started(Protocol, IPAddress, Port) ->
     %% We need the ip to distinguish e.g. 0.0.0.0 and 127.0.0.1
     %% We need the host so we can distinguish multiple instances of the above
     %% in a cluster.
     ok = mnesia:dirty_write(
-           rabbit_listener,
+           emqtt_listener,
            #listener{node = node(),
                      protocol = Protocol,
                      host = tcp_host(IPAddress),
@@ -281,7 +226,7 @@ tcp_listener_started(Protocol, IPAddress, Port) ->
 
 tcp_listener_stopped(Protocol, IPAddress, Port) ->
     ok = mnesia:dirty_delete_object(
-           rabbit_listener,
+           emqtt_listener,
            #listener{node = node(),
                      protocol = Protocol,
                      host = tcp_host(IPAddress),
@@ -289,58 +234,51 @@ tcp_listener_stopped(Protocol, IPAddress, Port) ->
                      port = Port}).
 
 active_listeners() ->
-    rabbit_misc:dirty_read_all(rabbit_listener).
+    emqtt_misc:dirty_read_all(emqtt_listener).
 
 node_listeners(Node) ->
-    mnesia:dirty_read(rabbit_listener, Node).
+    mnesia:dirty_read(emqtt_listener, Node).
 
 on_node_down(Node) ->
-    ok = mnesia:dirty_delete(rabbit_listener, Node).
-
-start_client(Sock, SockTransform) ->
-    {ok, _Child, Reader} = supervisor:start_child(rabbit_tcp_client_sup, []),
-    ok = rabbit_net:controlling_process(Sock, Reader),
-    Reader ! {go, Sock, SockTransform},
-    Reader.
+    ok = mnesia:dirty_delete(emqtt_listener, Node).
 
 start_client(Sock) ->
-    start_client(Sock, fun (S) -> {ok, S} end).
-
-start_ssl_client(SslOpts, Sock) ->
-    start_client(Sock, ssl_transform_fun(SslOpts)).
+    {ok, _Child, Reader} = supervisor:start_child(emqtt_tcp_client_sup, [Sock]),
+    emqtt_net:controlling_process(Sock, Reader),
+    Reader.
 
 connections() ->
-    rabbit_misc:append_rpc_all_nodes(rabbit_mnesia:running_clustered_nodes(),
-                                     rabbit_networking, connections_local, []).
+    emqtt_misc:append_rpc_all_nodes(emqtt_mnesia:running_clustered_nodes(),
+                                     emqtt_networking, connections_local, []).
 
 connections_local() ->
     [Reader ||
         {_, ConnSup, supervisor, _}
-            <- supervisor:which_children(rabbit_tcp_client_sup),
+            <- supervisor:which_children(emqtt_tcp_client_sup),
         Reader <- [try
-                       rabbit_connection_sup:reader(ConnSup)
+                       emqtt_connection_sup:reader(ConnSup)
                    catch exit:{noproc, _} ->
                            noproc
                    end],
         Reader =/= noproc].
 
-connection_info_keys() -> rabbit_reader:info_keys().
+connection_info_keys() -> emqtt_reader:info_keys().
 
-connection_info(Pid) -> rabbit_reader:info(Pid).
-connection_info(Pid, Items) -> rabbit_reader:info(Pid, Items).
+connection_info(Pid) -> emqtt_reader:info(Pid).
+connection_info(Pid, Items) -> emqtt_reader:info(Pid, Items).
 
 connection_info_all() -> cmap(fun (Q) -> connection_info(Q) end).
 connection_info_all(Items) -> cmap(fun (Q) -> connection_info(Q, Items) end).
 
 close_connection(Pid, Explanation) ->
-    rabbit_log:info("Closing connection ~p because ~p~n", [Pid, Explanation]),
+    emqtt_log:info("Closing connection ~p because ~p~n", [Pid, Explanation]),
     case lists:member(Pid, connections()) of
-        true  -> rabbit_reader:shutdown(Pid, Explanation);
+        true  -> emqtt_reader:shutdown(Pid, Explanation);
         false -> throw({error, {not_a_connection_pid, Pid}})
     end.
 
 force_connection_event_refresh() ->
-    [rabbit_reader:force_event_refresh(C) || C <- connections()],
+    [emqtt_reader:force_event_refresh(C) || C <- connections()],
     ok.
 
 %%--------------------------------------------------------------------
@@ -354,7 +292,7 @@ tcp_host({0,0,0,0,0,0,0,0}) ->
 tcp_host(IPAddress) ->
     case inet:gethostbyaddr(IPAddress) of
         {ok, #hostent{h_name = Name}} -> Name;
-        {error, _Reason} -> rabbit_misc:ntoa(IPAddress)
+        {error, _Reason} -> emqtt_misc:ntoa(IPAddress)
     end.
 
 hostname() ->
@@ -364,10 +302,10 @@ hostname() ->
         {error, _Reason}                 -> Hostname
     end.
 
-cmap(F) -> rabbit_misc:filter_exit_map(F, connections()).
+cmap(F) -> emqtt_misc:filter_exit_map(F, connections()).
 
 tcp_opts() ->
-    {ok, Opts} = application:get_env(rabbit, tcp_listen_options),
+    {ok, Opts} = application:get_env(emqtt, tcp_listen_options),
     Opts.
 
 %%--------------------------------------------------------------------

@@ -425,7 +425,7 @@
 
 -spec(create_tables/0 :: () -> 'ok' | {'aborted', any()}).
 -spec(start_link/3 :: (group_name(), atom(), any()) ->
-                           rabbit_types:ok_pid_or_error()).
+                           emqtt_types:ok_pid_or_error()).
 -spec(leave/1 :: (pid()) -> 'ok').
 -spec(broadcast/2 :: (pid(), any()) -> 'ok').
 -spec(confirmed_broadcast/2 :: (pid(), any()) -> 'ok').

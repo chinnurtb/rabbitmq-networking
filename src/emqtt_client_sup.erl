@@ -14,7 +14,7 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_client_sup).
+-module(emqtt_client_sup).
 
 -behaviour(supervisor2).
 
@@ -22,15 +22,15 @@
 
 -export([init/1]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
 
--spec(start_link/1 :: (mfa()) -> rabbit_types:ok_pid_or_error()).
+-spec(start_link/1 :: (mfa()) -> emqtt_types:ok_pid_or_error()).
 -spec(start_link/2 :: ({'local', atom()}, mfa()) ->
-                           rabbit_types:ok_pid_or_error()).
+                           emqtt_types:ok_pid_or_error()).
 
 -endif.
 

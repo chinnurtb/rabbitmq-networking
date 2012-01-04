@@ -14,15 +14,15 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_types).
+-module(emqtt_types).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 -ifdef(use_specs).
 
 -export_type([maybe/1, info/0, infos/0, info_key/0, info_keys/0,
               ctag/0, listener/0,
-              connection/0, protocol/0,
+              connection/0, mqtt_packet/0, 
               username/0, password/0, ok/1, error/1,
               ok_or_error/1, ok_or_error2/2, ok_pid_or_error/0, channel_exit/0,
               connection_exit/0]).
@@ -43,13 +43,17 @@
 
 -type(listener() ::
         #listener{node     :: node(),
-                  protocol :: atom(),
-                  host     :: rabbit_networking:hostname(),
-                  port     :: rabbit_networking:ip_port()}).
+                  host     :: emqtt_networking:hostname(),
+                  port     :: emqtt_networking:ip_port()}).
+-type(mqtt_packet() ::
+        #mqtt_packet{id			  :: integer(),
+                  type	          :: integer(),
+                  dup	          :: boolean(),
+                  qos			  :: integer(),
+                  retain	      :: boolean(),
+                  arg			  :: any()}).
 
 -type(connection() :: pid()).
-
--type(protocol() :: rabbit_framing:protocol()).
 
 -type(username() :: binary()).
 -type(password() :: binary()).

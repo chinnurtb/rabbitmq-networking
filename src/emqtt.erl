@@ -14,7 +14,7 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit).
+-module(emqtt).
 
 -behaviour(application).
 
@@ -25,57 +25,54 @@
 
 %%---------------------------------------------------------------------------
 %% Boot steps.
--export([recover/0]).
+-emqtt_boot_step({pre_boot, [{description, "emqtt boot start"}]}).
 
--rabbit_boot_step({pre_boot, [{description, "rabbit boot start"}]}).
-
--rabbit_boot_step({database,
+-emqtt_boot_step({database,
                    [{mfa,         {mnesia, start, []}},
                     {requires,    file_handle_cache},
                     {enables,     external_infrastructure}]}).
 
--rabbit_boot_step({file_handle_cache,
+-emqtt_boot_step({file_handle_cache,
                    [{description, "file handle cache server"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
+                    {mfa,         {emqtt_sup, start_restartable_child,
                                    [file_handle_cache]}},
                     {requires,    pre_boot},
                     {enables,     worker_pool}]}).
 
--rabbit_boot_step({worker_pool,
+-emqtt_boot_step({worker_pool,
                    [{description, "worker pool"},
-                    {mfa,         {rabbit_sup, start_child, [worker_pool_sup]}},
+                    {mfa,         {emqtt_sup, start_child, [worker_pool_sup]}},
                     {requires,    pre_boot},
                     {enables,     external_infrastructure}]}).
 
--rabbit_boot_step({external_infrastructure,
+-emqtt_boot_step({external_infrastructure,
                    [{description, "external infrastructure ready"}]}).
 
--rabbit_boot_step({rabbit_log,
+-emqtt_boot_step({emqtt_log,
                    [{description, "logging server"},
-                    {mfa,         {rabbit_sup, start_restartable_child,
-                                   [rabbit_log]}},
+                    {mfa,         {emqtt_sup, start_restartable_child,
+                                   [emqtt_log]}},
                     {requires,    external_infrastructure},
                     {enables,     kernel_ready}]}).
 
--rabbit_boot_step({kernel_ready,
+-emqtt_boot_step({kernel_ready,
                    [{description, "kernel ready"},
                     {requires,    external_infrastructure}]}).
 
--rabbit_boot_step({core_initialized,
+-emqtt_boot_step({core_initialized,
                    [{description, "core initialized"},
                     {requires,    kernel_ready}]}).
 
--rabbit_boot_step({networking,
-                   [{mfa,         {rabbit_networking, boot, []}},
+-emqtt_boot_step({networking,
+                   [{mfa,         {emqtt_networking, boot, []}},
                     {requires,    core_initialized}]}).
 
 
 %%---------------------------------------------------------------------------
 
--include("rabbit_framing.hrl").
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
--define(APPS, [sasl, os_mon, mnesia, rabbit]).
+-define(APPS, [sasl, os_mon, mnesia, emqtt]).
 
 %%----------------------------------------------------------------------------
 
@@ -96,8 +93,6 @@
 -spec(is_running/1 :: (node()) -> boolean()).
 -spec(environment/0 :: () -> [{atom() | term()}]).
 
--spec(recover/0 :: () -> 'ok').
-
 -spec(start/2 :: ('normal',[]) ->
 		      {'error',
 		       {'erlang_version_too_old',
@@ -111,17 +106,17 @@
 %%----------------------------------------------------------------------------
 
 start() ->
-	rabbit_misc:start_applications(application_load_order()).
+	emqtt_misc:start_applications(application_load_order()).
 
 stop() ->
-    rabbit_log:info("Stopping Rabbit~n"),
-    ok = rabbit_misc:stop_applications(application_load_order()).
+    emqtt_log:info("Stopping Rabbit~n"),
+    ok = emqtt_misc:stop_applications(application_load_order()).
 
 stop_and_halt() ->
     try
         stop()
     after
-        rabbit_misc:local_info_msg("Halting Erlang VM~n", []),
+        emqtt_misc:local_info_msg("Halting Erlang VM~n", []),
         init:stop()
     end,
     ok.
@@ -138,12 +133,12 @@ is_running() -> is_running(node()).
 is_running(Node) ->
     case rpc:call(Node, application, which_applications, [infinity]) of
         {badrpc, _} -> false;
-        Apps        -> proplists:is_defined(rabbit, Apps)
+        Apps        -> proplists:is_defined(emqtt, Apps)
     end.
 
 environment() ->
     lists:keysort(
-      1, [P || P = {K, _} <- application:get_all_env(rabbit),
+      1, [P || P = {K, _} <- application:get_all_env(emqtt),
                K =/= default_pass]).
 
 %%--------------------------------------------------------------------
@@ -151,8 +146,8 @@ environment() ->
 start(normal, []) ->
     case erts_version_check() of
 	ok ->
-		{ok, SupPid} = rabbit_sup:start_link(),
-		true = register(rabbit, self()),
+		{ok, SupPid} = emqtt_sup:start_link(),
+		true = register(emqtt, self()),
 
 		print_banner(),
 		[ok = run_boot_step(Step) || Step <- boot_steps()],
@@ -170,7 +165,7 @@ stop(_State) ->
 
 application_load_order() ->
     ok = load_applications(),
-    {ok, G} = rabbit_misc:build_acyclic_graph(
+    {ok, G} = emqtt_misc:build_acyclic_graph(
                 fun (App, _Deps) -> [{App, App}] end,
                 fun (App,  Deps) -> [{Dep, App} || Dep <- Deps] end,
                 [{App, app_dependencies(App)} ||
@@ -233,7 +228,7 @@ run_boot_step({StepName, Attributes}) ->
     end.
 
 boot_steps() ->
-    sort_boot_steps(rabbit_misc:all_module_attributes(rabbit_boot_step)).
+    sort_boot_steps(emqtt_misc:all_module_attributes(emqtt_boot_step)).
 
 vertices(_Module, Steps) ->
     [{StepName, {StepName, Atts}} || {StepName, Atts} <- Steps].
@@ -247,7 +242,7 @@ edges(_Module, Steps) ->
             Key =:= requires orelse Key =:= enables].
 
 sort_boot_steps(UnsortedSteps) ->
-    case rabbit_misc:build_acyclic_graph(fun vertices/2, fun edges/2,
+    case emqtt_misc:build_acyclic_graph(fun vertices/2, fun edges/2,
                                          UnsortedSteps) of
         {ok, G} ->
             %% Use topological sort to find a consistent ordering (if
@@ -292,15 +287,12 @@ boot_error(Format, Args) ->
     exit({?MODULE, failure_during_boot}).
 
 
-recover() ->
-    rabbit_binding:recover(rabbit_exchange:recover(), rabbit_amqqueue:start()).
-
 %%---------------------------------------------------------------------------
 %% misc
 
 erts_version_check() ->
     FoundVer = erlang:system_info(version),
-    case rabbit_misc:version_compare(?ERTS_MINIMUM, FoundVer, lte) of
+    case emqtt_misc:version_compare(?ERTS_MINIMUM, FoundVer, lte) of
 	true  -> ok;
 	false -> {error, {erlang_version_too_old,
 					  {found, FoundVer}, {required, ?ERTS_MINIMUM}}}
@@ -330,8 +322,8 @@ print_banner() ->
                 {"app descriptor", app_location()},
                 {"home dir",       home_dir()},
                 {"config file(s)", config_files()},
-                {"cookie hash",    rabbit_misc:cookie_hash()},
-                {"database dir",   rabbit_mnesia:dir()},
+                {"cookie hash",    emqtt_misc:cookie_hash()},
+                {"database dir",   emqtt_mnesia:dir()},
                 {"erlang version", erlang:system_info(version)}],
     DescrLen = 1 + lists:max([length(K) || {K, _V} <- Settings]),
     Format = fun (K, V) ->

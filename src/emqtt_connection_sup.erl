@@ -14,45 +14,43 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_connection_sup).
+-module(emqtt_connection_sup).
 
 -behaviour(supervisor2).
 
--export([start_link/0, reader/1]).
+-export([start_link/1, reader/1]).
 
 -export([init/1]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
 
--spec(start_link/0 :: () -> {'ok', pid(), pid()}).
+-spec(start_link/1 :: (port()) -> {'ok', pid(), pid()}).
+
 -spec(reader/1 :: (pid()) -> pid()).
 
 -endif.
 
 %%--------------------------------------------------------------------------
-
-start_link() ->
+start_link(Sock) ->
     {ok, SupPid} = supervisor2:start_link(?MODULE, []),
     {ok, ClientPid} =
         supervisor2:start_child(
           SupPid,
-          {client, {rabbit_client, start_link, []},
-           intrinsic, ?MAX_WAIT, worker, [rabbit_client]}),
+          {client, {emqtt_client, start_link, [Sock]},
+           intrinsic, ?MAX_WAIT, worker, [emqtt_client]}),
     {ok, ReaderPid} =
         supervisor2:start_child(
           SupPid,
-          {reader, {rabbit_reader, start_link, [ClientPid]},
-           intrinsic, ?MAX_WAIT, worker, [rabbit_reader]}),
+          {reader, {emqtt_reader, start_link, [Sock, ClientPid]},
+           intrinsic, ?MAX_WAIT, worker, [emqtt_reader]}),
     {ok, SupPid, ReaderPid}.
 
 reader(Pid) ->
     hd(supervisor2:find_child(Pid, reader)).
-
-%%--------------------------------------------------------------------------
 
 init([]) ->
     {ok, {{one_for_all, 0, 1}, []}}.

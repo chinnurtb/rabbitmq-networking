@@ -14,17 +14,12 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_misc).
--include("rabbit.hrl").
--include("rabbit_framing.hrl").
+-module(emqtt_misc).
+-include("emqtt.hrl").
 
 -export([method_record_type/1, polite_pause/0, polite_pause/1]).
--export([die/1, frame_error/2, amqp_error/4,
-         protocol_error/3, protocol_error/4, protocol_error/1]).
--export([not_found/1, assert_args_equivalence/4]).
 -export([dirty_read/1]).
 -export([table_lookup/2, set_table_value/4]).
--export([r/3, r/2, r_arg/4, rs/1]).
 -export([enable_cover/0, report_cover/0]).
 -export([enable_cover/1, report_cover/1]).
 -export([start_cover/1]).
@@ -61,79 +56,32 @@
 
 -ifdef(use_specs).
 
--export_type([resource_name/0, thunk/1]).
-
--type(ok_or_error() :: rabbit_types:ok_or_error(any())).
+-type(ok_or_error() :: emqtt_types:ok_or_error(any())).
 -type(thunk(T) :: fun(() -> T)).
--type(resource_name() :: binary()).
 -type(optdef() :: {flag, string()} | {option, string(), any()}).
--type(channel_or_connection_exit()
-      :: rabbit_types:channel_exit() | rabbit_types:connection_exit()).
 -type(digraph_label() :: term()).
 -type(graph_vertex_fun() ::
         fun ((atom(), [term()]) -> [{digraph:vertex(), digraph_label()}])).
 -type(graph_edge_fun() ::
         fun ((atom(), [term()]) -> [{digraph:vertex(), digraph:vertex()}])).
 
--spec(method_record_type/1 :: (rabbit_framing:amqp_method_record())
-                              -> rabbit_framing:amqp_method_name()).
 -spec(polite_pause/0 :: () -> 'done').
 -spec(polite_pause/1 :: (non_neg_integer()) -> 'done').
--spec(die/1 ::
-        (rabbit_framing:amqp_exception()) -> channel_or_connection_exit()).
--spec(frame_error/2 :: (rabbit_framing:amqp_method_name(), binary())
-                       -> rabbit_types:connection_exit()).
--spec(amqp_error/4 ::
-        (rabbit_framing:amqp_exception(), string(), [any()],
-         rabbit_framing:amqp_method_name())
-        -> rabbit_types:amqp_error()).
--spec(protocol_error/3 :: (rabbit_framing:amqp_exception(), string(), [any()])
-                          -> channel_or_connection_exit()).
--spec(protocol_error/4 ::
-        (rabbit_framing:amqp_exception(), string(), [any()],
-         rabbit_framing:amqp_method_name()) -> channel_or_connection_exit()).
--spec(protocol_error/1 ::
-        (rabbit_types:amqp_error()) -> channel_or_connection_exit()).
--spec(not_found/1 :: (rabbit_types:r(atom())) -> rabbit_types:channel_exit()).
--spec(assert_args_equivalence/4 :: (rabbit_framing:amqp_table(),
-                                    rabbit_framing:amqp_table(),
-                                    rabbit_types:r(any()), [binary()]) ->
-                                        'ok' | rabbit_types:connection_exit()).
 -spec(dirty_read/1 ::
-        ({atom(), any()}) -> rabbit_types:ok_or_error2(any(), 'not_found')).
--spec(table_lookup/2 ::
-        (rabbit_framing:amqp_table(), binary())
-        -> 'undefined' | {rabbit_framing:amqp_field_type(), any()}).
--spec(set_table_value/4 ::
-        (rabbit_framing:amqp_table(), binary(),
-         rabbit_framing:amqp_field_type(), rabbit_framing:amqp_value())
-        -> rabbit_framing:amqp_table()).
+        ({atom(), any()}) -> emqtt_types:ok_or_error2(any(), 'not_found')).
 
--spec(r/2 :: (rabbit_types:vhost(), K)
-             -> rabbit_types:r3(rabbit_types:vhost(), K, '_')
-                    when is_subtype(K, atom())).
--spec(r/3 ::
-        (rabbit_types:vhost() | rabbit_types:r(atom()), K, resource_name())
-        -> rabbit_types:r3(rabbit_types:vhost(), K, resource_name())
-               when is_subtype(K, atom())).
--spec(r_arg/4 ::
-        (rabbit_types:vhost() | rabbit_types:r(atom()), K,
-         rabbit_framing:amqp_table(), binary())
-        -> undefined | rabbit_types:r(K)
-               when is_subtype(K, atom())).
--spec(rs/1 :: (rabbit_types:r(atom())) -> string()).
 -spec(enable_cover/0 :: () -> ok_or_error()).
 -spec(start_cover/1 :: ([{string(), string()} | string()]) -> 'ok').
 -spec(report_cover/0 :: () -> 'ok').
 -spec(enable_cover/1 :: ([file:filename() | atom()]) -> ok_or_error()).
 -spec(report_cover/1 :: ([file:filename() | atom()]) -> 'ok').
 -spec(throw_on_error/2 ::
-        (atom(), thunk(rabbit_types:error(any()) | {ok, A} | A)) -> A).
+        (atom(), thunk(emqtt_types:error(any()) | {ok, A} | A)) -> A).
 -spec(with_exit_handler/2 :: (thunk(A), thunk(A)) -> A).
 -spec(filter_exit_map/2 :: (fun ((A) -> B), [A]) -> [B]).
--spec(with_user/2 :: (rabbit_types:username(), thunk(A)) -> A).
+-spec(with_user/2 :: (emqtt_types:username(), thunk(A)) -> A).
 -spec(with_user_and_vhost/3 ::
-        (rabbit_types:username(), rabbit_types:vhost(), thunk(A))
+        (emqtt_types:username(), emqtt_types:vhost(), thunk(A))
         -> A).
 -spec(execute_mnesia_transaction/1 :: (thunk(A)) -> A).
 -spec(execute_mnesia_transaction/2 ::
@@ -145,7 +93,7 @@
 -spec(nodeparts/1 :: (node() | string()) -> {string(), string()}).
 -spec(cookie_hash/0 :: () -> string()).
 -spec(tcp_name/3 ::
-        (atom(), inet:ip_address(), rabbit_networking:ip_port())
+        (atom(), inet:ip_address(), emqtt_networking:ip_port())
         -> atom()).
 -spec(upmap/2 :: (fun ((A) -> B), [A]) -> [B]).
 -spec(map_in_order/2 :: (fun ((A) -> B), [A]) -> [B]).
@@ -163,8 +111,6 @@
 -spec(unfold/2  :: (fun ((A) -> ({'true', B, A} | 'false')), A) -> {[B], A}).
 -spec(ceil/1 :: (number()) -> integer()).
 -spec(queue_fold/3 :: (fun ((any(), B) -> B), B, queue()) -> B).
--spec(sort_field_table/1 ::
-        (rabbit_framing:amqp_table()) -> rabbit_framing:amqp_table()).
 -spec(pid_to_string/1 :: (pid()) -> string()).
 -spec(string_to_pid/1 :: (string()) -> pid()).
 -spec(version_compare/2 :: (string(), string()) -> 'lt' | 'eq' | 'gt').
@@ -182,7 +128,7 @@
 -spec(all_module_attributes/1 :: (atom()) -> [{atom(), [term()]}]).
 -spec(build_acyclic_graph/3 ::
         (graph_vertex_fun(), graph_edge_fun(), [{atom(), [term()]}])
-        -> rabbit_types:ok_or_error2(digraph(),
+        -> emqtt_types:ok_or_error2(digraph(),
                                      {'vertex', 'duplicate', digraph:vertex()} |
                                      {'edge', ({bad_vertex, digraph:vertex()} |
                                                {bad_edge, [digraph:vertex()]}),
@@ -215,70 +161,6 @@ polite_pause(N) ->
     after N -> done
     end.
 
-die(Error) ->
-    protocol_error(Error, "~w", [Error]).
-
-frame_error(MethodName, BinaryFields) ->
-    protocol_error(frame_error, "cannot decode ~w", [BinaryFields], MethodName).
-
-amqp_error(Name, ExplanationFormat, Params, Method) ->
-    Explanation = lists:flatten(io_lib:format(ExplanationFormat, Params)),
-    #amqp_error{name = Name, explanation = Explanation, method = Method}.
-
-protocol_error(Name, ExplanationFormat, Params) ->
-    protocol_error(Name, ExplanationFormat, Params, none).
-
-protocol_error(Name, ExplanationFormat, Params, Method) ->
-    protocol_error(amqp_error(Name, ExplanationFormat, Params, Method)).
-
-protocol_error(#amqp_error{} = Error) ->
-    exit(Error).
-
-not_found(R) -> protocol_error(not_found, "no ~s", [rs(R)]).
-
-type_class(byte)      -> int;
-type_class(short)     -> int;
-type_class(signedint) -> int;
-type_class(long)      -> int;
-type_class(decimal)   -> int;
-type_class(float)     -> float;
-type_class(double)    -> float;
-type_class(Other)     -> Other.
-
-assert_args_equivalence(Orig, New, Name, Keys) ->
-    [assert_args_equivalence1(Orig, New, Name, Key) || Key <- Keys],
-    ok.
-
-assert_args_equivalence1(Orig, New, Name, Key) ->
-    {Orig1, New1} = {table_lookup(Orig, Key), table_lookup(New, Key)},
-    FailureFun = fun () ->
-                     protocol_error(precondition_failed, "inequivalent arg '~s'"
-                                    "for ~s: received ~s but current is ~s",
-                                    [Key, rs(Name), val(New1), val(Orig1)])
-                 end,
-    case {Orig1, New1} of
-        {Same, Same} ->
-            ok;
-        {{OrigType, OrigVal}, {NewType, NewVal}} ->
-            case type_class(OrigType) == type_class(NewType) andalso
-                 OrigVal == NewVal of
-                 true  -> ok;
-                 false -> FailureFun()
-            end;
-        {_, _} ->
-            FailureFun()
-    end.
-
-val(undefined) ->
-    "none";
-val({Type, Value}) ->
-    ValFmt = case is_binary(Value) of
-                 true  -> "~s";
-                 false -> "~w"
-             end,
-    lists:flatten(io_lib:format("the value '" ++ ValFmt ++ "' of type '~s'",
-                                [Value, Type])).
-
 %% Normally we'd call mnesia:dirty_read/1 here, but that is quite
 %% expensive due to general mnesia overheads (figuring out table types
 %% and locations, etc). We get away with bypassing these because we
@@ -301,27 +183,6 @@ table_lookup(Table, Key) ->
 set_table_value(Table, Key, Type, Value) ->
     sort_field_table(
       lists:keystore(Key, 1, Table, {Key, Type, Value})).
-
-r(#resource{virtual_host = VHostPath}, Kind, Name)
-  when is_binary(Name) ->
-    #resource{virtual_host = VHostPath, kind = Kind, name = Name};
-r(VHostPath, Kind, Name) when is_binary(Name) andalso is_binary(VHostPath) ->
-    #resource{virtual_host = VHostPath, kind = Kind, name = Name}.
-
-r(VHostPath, Kind) when is_binary(VHostPath) ->
-    #resource{virtual_host = VHostPath, kind = Kind, name = '_'}.
-
-r_arg(#resource{virtual_host = VHostPath}, Kind, Table, Key) ->
-    r_arg(VHostPath, Kind, Table, Key);
-r_arg(VHostPath, Kind, Table, Key) ->
-    case table_lookup(Table, Key) of
-        {longstr, NameBin} -> r(VHostPath, Kind, NameBin);
-        undefined          -> undefined
-    end.
-
-rs(#resource{virtual_host = VHostPath, kind = Kind, name = Name}) ->
-    lists:flatten(io_lib:format("~s '~s' in vhost '~s'",
-                                [Kind, Name, VHostPath])).
 
 enable_cover() -> enable_cover(["."]).
 
@@ -403,7 +264,7 @@ filter_exit_map(F, L) ->
 
 with_user(Username, Thunk) ->
     fun () ->
-            case mnesia:read({rabbit_user, Username}) of
+            case mnesia:read({emqtt_user, Username}) of
                 [] ->
                     mnesia:abort({no_such_user, Username});
                 [_U] ->
@@ -412,7 +273,7 @@ with_user(Username, Thunk) ->
     end.
 
 with_user_and_vhost(Username, VHostPath, Thunk) ->
-    with_user(Username, rabbit_vhost:with(VHostPath, Thunk)).
+    with_user(Username, emqtt_vhost:with(VHostPath, Thunk)).
 
 execute_mnesia_transaction(TxFun) ->
     %% Making this a sync_transaction allows us to use dirty_read
@@ -567,9 +428,6 @@ with_local_io(Fun) ->
         group_leader(GL, self())
     end.
 
-%% Log an info message on the local node using the standard logger.
-%% Use this if rabbit isn't running and the call didn't originate on
-%% the local node (e.g. rabbitmqctl calls).
 local_info_msg(Format, Args) ->
     with_local_io(fun () -> error_logger:info_msg(Format, Args) end).
 

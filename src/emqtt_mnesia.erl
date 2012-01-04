@@ -14,8 +14,7 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
-
--module(rabbit_mnesia).
+-module(emqtt_mnesia).
 
 -export([ensure_mnesia_dir/0, dir/0, status/0, init/0, is_db_empty/0,
          cluster/1, force_cluster/1, reset/0, force_reset/0, init_db/3,
@@ -32,7 +31,7 @@
 %% other mnesia-using Erlang applications, such as ejabberd
 -export([create_tables/0]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 %%----------------------------------------------------------------------------
 
@@ -46,7 +45,7 @@
 -spec(dir/0 :: () -> file:filename()).
 -spec(ensure_mnesia_dir/0 :: () -> 'ok').
 -spec(init/0 :: () -> 'ok').
--spec(init_db/3 :: ([node()], boolean(), rabbit_misc:thunk('ok')) -> 'ok').
+-spec(init_db/3 :: ([node()], boolean(), emqtt_misc:thunk('ok')) -> 'ok').
 -spec(is_db_empty/0 :: () -> boolean()).
 -spec(cluster/1 :: ([node()]) -> 'ok').
 -spec(force_cluster/1 :: ([node()]) -> 'ok').
@@ -58,7 +57,7 @@
 -spec(all_clustered_nodes/0 :: () -> [node()]).
 -spec(empty_ram_only_tables/0 :: () -> 'ok').
 -spec(create_tables/0 :: () -> 'ok').
--spec(copy_db/1 :: (file:filename()) ->  rabbit_types:ok_or_error(any())).
+-spec(copy_db/1 :: (file:filename()) ->  emqtt_types:ok_or_error(any())).
 -spec(wait_for_tables/1 :: ([atom()]) -> 'ok').
 -spec(create_cluster_nodes_config/1 :: ([node()]) ->  'ok').
 -spec(read_cluster_nodes_config/0 :: () ->  [node()]).
@@ -91,7 +90,7 @@ status() ->
                            Nodes -> [{unknown, Nodes}]
                        end;
                  Reason when Reason =:= starting; Reason =:= stopping ->
-                     exit({rabbit_busy, try_again_later})
+                     exit({emqtt_busy, try_again_later})
              end},
      {running_nodes, running_clustered_nodes()}].
 
@@ -121,7 +120,7 @@ force_cluster(ClusterNodes) ->
 %% node.  If Force is false, only connections to online nodes are
 %% allowed.
 cluster(ClusterNodes, Force) ->
-    rabbit_misc:local_info_msg("Clustering with ~p~s~n",
+    emqtt_misc:local_info_msg("Clustering with ~p~s~n",
                                [ClusterNodes, if Force -> " forcefully";
                                                  true  -> ""
                                               end]),
@@ -138,12 +137,12 @@ cluster(ClusterNodes, Force) ->
 
     %% Wipe mnesia if we're changing type from disc to ram
     case {is_disc_node(), should_be_disc_node(ClusterNodes)} of
-        {true, false} -> rabbit_misc:with_local_io(
+        {true, false} -> emqtt_misc:with_local_io(
                            fun () -> error_logger:warning_msg(
                                        "changing node type; wiping "
                                        "mnesia...~n~n")
                            end),
-                         rabbit_misc:ensure_ok(mnesia:delete_schema([node()]),
+                         emqtt_misc:ensure_ok(mnesia:delete_schema([node()]),
                                                cannot_delete_schema);
         _             -> ok
     end,
@@ -225,107 +224,13 @@ table_definitions(ram) ->
     [{Tab, copy_type_to_ram(TabDef)} || {Tab, TabDef} <- table_definitions()].
 
 table_definitions() ->
-    [{rabbit_user,
-      [{record_name, internal_user},
-       {attributes, record_info(fields, internal_user)},
-       {disc_copies, [node()]},
-       {match, #internal_user{_='_'}}]},
-     {rabbit_user_permission,
-      [{record_name, user_permission},
-       {attributes, record_info(fields, user_permission)},
-       {disc_copies, [node()]},
-       {match, #user_permission{user_vhost = #user_vhost{_='_'},
-                                permission = #permission{_='_'},
-                                _='_'}}]},
-     {rabbit_vhost,
-      [{record_name, vhost},
-       {attributes, record_info(fields, vhost)},
-       {disc_copies, [node()]},
-       {match, #vhost{_='_'}}]},
-     {rabbit_listener,
+    [{emqtt_listener,
       [{record_name, listener},
        {attributes, record_info(fields, listener)},
        {type, bag},
-       {match, #listener{_='_'}}]},
-     {rabbit_durable_route,
-      [{record_name, route},
-       {attributes, record_info(fields, route)},
-       {disc_copies, [node()]},
-       {match, #route{binding = binding_match(), _='_'}}]},
-     {rabbit_semi_durable_route,
-      [{record_name, route},
-       {attributes, record_info(fields, route)},
-       {type, ordered_set},
-       {match, #route{binding = binding_match(), _='_'}}]},
-     {rabbit_route,
-      [{record_name, route},
-       {attributes, record_info(fields, route)},
-       {type, ordered_set},
-       {match, #route{binding = binding_match(), _='_'}}]},
-     {rabbit_reverse_route,
-      [{record_name, reverse_route},
-       {attributes, record_info(fields, reverse_route)},
-       {type, ordered_set},
-       {match, #reverse_route{reverse_binding = reverse_binding_match(),
-                              _='_'}}]},
-     {rabbit_topic_trie_edge,
-      [{record_name, topic_trie_edge},
-       {attributes, record_info(fields, topic_trie_edge)},
-       {type, ordered_set},
-       {match, #topic_trie_edge{trie_edge = trie_edge_match(), _='_'}}]},
-     {rabbit_topic_trie_binding,
-      [{record_name, topic_trie_binding},
-       {attributes, record_info(fields, topic_trie_binding)},
-       {type, ordered_set},
-       {match, #topic_trie_binding{trie_binding = trie_binding_match(),
-                                   _='_'}}]},
-     {rabbit_durable_exchange,
-      [{record_name, exchange},
-       {attributes, record_info(fields, exchange)},
-       {disc_copies, [node()]},
-       {match, #exchange{name = exchange_name_match(), _='_'}}]},
-     {rabbit_exchange,
-      [{record_name, exchange},
-       {attributes, record_info(fields, exchange)},
-       {match, #exchange{name = exchange_name_match(), _='_'}}]},
-     {rabbit_exchange_serial,
-      [{record_name, exchange_serial},
-       {attributes, record_info(fields, exchange_serial)},
-       {match, #exchange_serial{name = exchange_name_match(), _='_'}}]},
-     {rabbit_durable_queue,
-      [{record_name, amqqueue},
-       {attributes, record_info(fields, amqqueue)},
-       {disc_copies, [node()]},
-       {match, #amqqueue{name = queue_name_match(), _='_'}}]},
-     {rabbit_queue,
-      [{record_name, amqqueue},
-       {attributes, record_info(fields, amqqueue)},
-       {match, #amqqueue{name = queue_name_match(), _='_'}}]}]
-        ++ gm:table_definitions()
-        ++ mirrored_supervisor:table_definitions().
-
-binding_match() ->
-    #binding{source = exchange_name_match(),
-             destination = binding_destination_match(),
-             _='_'}.
-reverse_binding_match() ->
-    #reverse_binding{destination = binding_destination_match(),
-                     source = exchange_name_match(),
-                     _='_'}.
-binding_destination_match() ->
-    resource_match('_').
-trie_edge_match() ->
-    #trie_edge{exchange_name = exchange_name_match(),
-               _='_'}.
-trie_binding_match() ->
-    #trie_binding{exchange_name = exchange_name_match(),
-                  _='_'}.
-exchange_name_match() ->
-    resource_match(exchange).
-queue_name_match() ->
-    resource_match(queue).
-resource_match(Kind) ->
-    #resource{kind = Kind, _='_'}.
+       {match, #listener{_='_'}}]}
+	] ++ gm:table_definitions()
+       ++ mirrored_supervisor:table_definitions().
 
 table_names() ->
     [Tab || {Tab, _} <- table_definitions()].
@@ -438,7 +343,7 @@ cluster_nodes_config_filename() ->
 
 create_cluster_nodes_config(ClusterNodes) ->
     FileName = cluster_nodes_config_filename(),
-    case rabbit_file:write_term_file(FileName, [ClusterNodes]) of
+    case emqtt_file:write_term_file(FileName, [ClusterNodes]) of
         ok -> ok;
         {error, Reason} ->
             throw({error, {cannot_create_cluster_nodes_config,
@@ -447,10 +352,10 @@ create_cluster_nodes_config(ClusterNodes) ->
 
 read_cluster_nodes_config() ->
     FileName = cluster_nodes_config_filename(),
-    case rabbit_file:read_term_file(FileName) of
+    case emqtt_file:read_term_file(FileName) of
         {ok, [ClusterNodes]} -> ClusterNodes;
         {error, enoent} ->
-            {ok, ClusterNodes} = application:get_env(rabbit, cluster_nodes),
+            {ok, ClusterNodes} = application:get_env(emqtt, cluster_nodes),
             ClusterNodes;
         {error, Reason} ->
             throw({error, {cannot_read_cluster_nodes_config,
@@ -475,12 +380,12 @@ record_running_nodes() ->
     Nodes = running_clustered_nodes() -- [node()],
     %% Don't check the result: we're shutting down anyway and this is
     %% a best-effort-basis.
-    rabbit_file:write_term_file(FileName, [Nodes]),
+    emqtt_file:write_term_file(FileName, [Nodes]),
     ok.
 
 read_previously_running_nodes() ->
     FileName = running_nodes_filename(),
-    case rabbit_file:read_term_file(FileName) of
+    case emqtt_file:read_term_file(FileName) of
         {ok, [Nodes]}   -> Nodes;
         {error, enoent} -> [];
         {error, Reason} -> throw({error, {cannot_read_previous_nodes_file,
@@ -529,14 +434,14 @@ init_db(ClusterNodes, Force, SecondaryPostMnesiaFun) ->
                     ok = create_schema(disc);
                 {[], true, true} ->
                     %% We're the first node up
-                    case rabbit_upgrade:maybe_upgrade_local() of
+                    case emqtt_upgrade:maybe_upgrade_local() of
                         ok                    -> ensure_schema_integrity();
                         version_not_available -> ok = schema_ok_or_move()
                     end;
                 {[AnotherNode|_], _, _} ->
                     %% Subsequent node in cluster, catch up
                     ensure_version_ok(
-                      rpc:call(AnotherNode, rabbit_version, recorded, [])),
+                      rpc:call(AnotherNode, emqtt_version, recorded, [])),
                     {CopyType, CopyTypeAlt} =
                         case WantDiscNode of
                             true  -> {disc, disc_copies};
@@ -568,11 +473,11 @@ init_db(ClusterNodes, Force, SecondaryPostMnesiaFun) ->
     end.
 
 maybe_upgrade_local_or_record_desired() ->
-    case rabbit_upgrade:maybe_upgrade_local() of
+    case emqtt_upgrade:maybe_upgrade_local() of
         ok                    -> ok;
         %% If we're just starting up a new node we won't have a
         %% version
-        version_not_available -> ok = rabbit_version:record_desired()
+        version_not_available -> ok = emqtt_version:record_desired()
     end.
 
 schema_ok_or_move() ->
@@ -580,7 +485,7 @@ schema_ok_or_move() ->
         ok ->
             ok;
         {error, Reason} ->
-            %% NB: we cannot use rabbit_log here since it may not have been
+            %% NB: we cannot use emqtt_log here since it may not have been
             %% started yet
             error_logger:warning_msg("schema integrity check failed: ~p~n"
                                      "moving database to backup location "
@@ -591,27 +496,27 @@ schema_ok_or_move() ->
     end.
 
 ensure_version_ok({ok, DiscVersion}) ->
-    DesiredVersion = rabbit_version:desired(),
-    case rabbit_version:matches(DesiredVersion, DiscVersion) of
+    DesiredVersion = emqtt_version:desired(),
+    case emqtt_version:matches(DesiredVersion, DiscVersion) of
         true  -> ok;
         false -> throw({error, {version_mismatch, DesiredVersion, DiscVersion}})
     end;
 ensure_version_ok({error, _}) ->
-    ok = rabbit_version:record_desired().
+    ok = emqtt_version:record_desired().
 
 create_schema(Type) ->
     stop_mnesia(),
     case Type of
-        disc -> rabbit_misc:ensure_ok(mnesia:create_schema([node()]),
+        disc -> emqtt_misc:ensure_ok(mnesia:create_schema([node()]),
                                       cannot_create_schema);
         ram  -> %% remove the disc schema since this is a ram node
-                rabbit_misc:ensure_ok(mnesia:delete_schema([node()]),
+                emqtt_misc:ensure_ok(mnesia:delete_schema([node()]),
                                       cannot_delete_schema)
     end,
     start_mnesia(),
     ok = create_tables(Type),
     ensure_schema_integrity(),
-    ok = rabbit_version:record_desired().
+    ok = emqtt_version:record_desired().
 
 is_disc_node() -> mnesia:system_info(use_dir).
 
@@ -628,7 +533,7 @@ move_db() ->
                                  Year, Month, Day, Hour, Minute, Second])),
     case file:rename(MnesiaDir, BackupDir) of
         ok ->
-            %% NB: we cannot use rabbit_log here since it may not have
+            %% NB: we cannot use emqtt_log here since it may not have
             %% been started yet
             error_logger:warning_msg("moved database from ~s to ~s~n",
                                      [MnesiaDir, BackupDir]),
@@ -642,7 +547,7 @@ move_db() ->
 
 copy_db(Destination) ->
     ok = ensure_mnesia_not_running(),
-    rabbit_file:recursive_copy(dir(), Destination).
+    emqtt_file:recursive_copy(dir(), Destination).
 
 create_tables() -> create_tables(disc).
 
@@ -722,7 +627,7 @@ wait_for_tables(TableNames) ->
     end.
 
 reset(Force) ->
-    rabbit_misc:local_info_msg("Resetting Rabbit~s~n", [if Force -> " forcefully";
+    emqtt_misc:local_info_msg("Resetting Rabbit~s~n", [if Force -> " forcefully";
                                                            true  -> ""
                                                         end]),
     ensure_mnesia_not_running(),
@@ -747,12 +652,12 @@ reset(Force) ->
                     stop_mnesia()
                 end,
             leave_cluster(Nodes, RunningNodes),
-            rabbit_misc:ensure_ok(mnesia:delete_schema([Node]),
+            emqtt_misc:ensure_ok(mnesia:delete_schema([Node]),
                                   cannot_delete_schema)
     end,
     ok = delete_cluster_nodes_config(),
     %% remove persisted messages and any other garbage we find
-    ok = rabbit_file:recursive_delete(filelib:wildcard(dir() ++ "/*")),
+    ok = emqtt_file:recursive_delete(filelib:wildcard(dir() ++ "/*")),
     ok.
 
 leave_cluster([], _) -> ok;
@@ -785,13 +690,13 @@ wait_for(Condition) ->
 
 on_node_up(Node) ->
     case is_only_disc_node(Node, true) of
-        true  -> rabbit_log:info("cluster contains disc nodes again~n");
+        true  -> emqtt_log:info("cluster contains disc nodes again~n");
         false -> ok
     end.
 
 on_node_down(Node) ->
     case is_only_disc_node(Node, true) of
-        true  -> rabbit_log:info("only running disc node went down~n");
+        true  -> emqtt_log:info("only running disc node went down~n");
         false -> ok
     end.
 
@@ -807,11 +712,11 @@ is_only_disc_node(Node, false) ->
 
 log_both(Warning) ->
     io:format("Warning: ~s~n", [Warning]),
-    rabbit_misc:with_local_io(
+    emqtt_misc:with_local_io(
       fun () -> error_logger:warning_msg("~s~n", [Warning]) end).
 
 start_mnesia() ->
-    rabbit_misc:ensure_ok(mnesia:start(), cannot_start_mnesia),
+    emqtt_misc:ensure_ok(mnesia:start(), cannot_start_mnesia),
     ensure_mnesia_running().
 
 stop_mnesia() ->

@@ -14,8 +14,8 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_net).
--include("rabbit.hrl").
+-module(emqtt_net).
+-include("emqtt.hrl").
 
 -export([is_ssl/1, ssl_info/1, controlling_process/2, getstat/2,
          recv/1, async_recv/3, port_command/2, setopts/2, send/2, close/1,
@@ -30,8 +30,8 @@
 -type(stat_option() ::
         'recv_cnt' | 'recv_max' | 'recv_avg' | 'recv_oct' | 'recv_dvi' |
         'send_cnt' | 'send_max' | 'send_avg' | 'send_oct' | 'send_pend').
--type(ok_val_or_error(A) :: rabbit_types:ok_or_error2(A, any())).
--type(ok_or_any_error() :: rabbit_types:ok_or_error(any())).
+-type(ok_val_or_error(A) :: emqtt_types:ok_or_error2(A, any())).
+-type(ok_or_any_error() :: emqtt_types:ok_or_error(any())).
 -type(socket() :: port() | #ssl_socket{}).
 
 -spec(is_ssl/1 :: (socket()) -> boolean()).
@@ -44,9 +44,9 @@
         -> ok_val_or_error([{stat_option(), integer()}])).
 -spec(recv/1 :: (socket()) ->
                      {'data', [char()] | binary()} | 'closed' |
-                     rabbit_types:error(any()) | {'other', any()}).
+                     emqtt_types:error(any()) | {'other', any()}).
 -spec(async_recv/3 ::
-        (socket(), integer(), timeout()) -> rabbit_types:ok(any())).
+        (socket(), integer(), timeout()) -> emqtt_types:ok(any())).
 -spec(port_command/2 :: (socket(), iolist()) -> 'true').
 -spec(setopts/2 :: (socket(), [{atom(), any()} |
                                {raw, non_neg_integer(), non_neg_integer(),
@@ -55,13 +55,13 @@
 -spec(close/1 :: (socket()) -> ok_or_any_error()).
 -spec(sockname/1 ::
         (socket())
-        -> ok_val_or_error({inet:ip_address(), rabbit_networking:ip_port()})).
+        -> ok_val_or_error({inet:ip_address(), emqtt_networking:ip_port()})).
 -spec(peername/1 ::
         (socket())
-        -> ok_val_or_error({inet:ip_address(), rabbit_networking:ip_port()})).
+        -> ok_val_or_error({inet:ip_address(), emqtt_networking:ip_port()})).
 -spec(peercert/1 ::
         (socket())
-        -> 'nossl' | ok_val_or_error(rabbit_ssl:certificate())).
+        -> 'nossl' | ok_val_or_error(emqtt_ssl:certificate())).
 
 -endif.
 

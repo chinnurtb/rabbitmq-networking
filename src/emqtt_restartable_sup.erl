@@ -14,7 +14,7 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_restartable_sup).
+-module(emqtt_restartable_sup).
 
 -behaviour(supervisor).
 
@@ -22,13 +22,13 @@
 
 -export([init/1]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
 
--spec(start_link/2 :: (atom(), mfa()) -> rabbit_types:ok_pid_or_error()).
+-spec(start_link/2 :: (atom(), mfa()) -> emqtt_types:ok_pid_or_error()).
 
 -endif.
 

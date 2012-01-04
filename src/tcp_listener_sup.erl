@@ -27,11 +27,11 @@
 -ifdef(use_specs).
 
 -spec(start_link/7 ::
-        (gen_tcp:ip_address(), integer(), rabbit_types:infos(), mfa(), mfa(),
-         mfa(), string()) -> rabbit_types:ok_pid_or_error()).
+        (gen_tcp:ip_address(), integer(), emqtt_types:infos(), mfa(), mfa(),
+         mfa(), string()) -> emqtt_types:ok_pid_or_error()).
 -spec(start_link/8 ::
-        (gen_tcp:ip_address(), integer(), rabbit_types:infos(), mfa(), mfa(),
-         mfa(), integer(), string()) -> rabbit_types:ok_pid_or_error()).
+        (gen_tcp:ip_address(), integer(), emqtt_types:infos(), mfa(), mfa(),
+         mfa(), integer(), string()) -> emqtt_types:ok_pid_or_error()).
 
 -endif.
 
@@ -54,7 +54,7 @@ init({IPAddress, Port, SocketOpts, OnStartup, OnShutdown,
     %% tcp_acceptor_sup, and the only way I can think of accomplishing
     %% that without jumping through hoops is to register the
     %% tcp_acceptor_sup.
-    Name = rabbit_misc:tcp_name(tcp_acceptor_sup, IPAddress, Port),
+    Name = emqtt_misc:tcp_name(tcp_acceptor_sup, IPAddress, Port),
     {ok, {{one_for_all, 10, 10},
           [{tcp_acceptor_sup, {tcp_acceptor_sup, start_link,
                                [Name, AcceptCallback]},

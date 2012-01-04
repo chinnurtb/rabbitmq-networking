@@ -14,7 +14,7 @@
 %% Copyright (c) 2007-2011 VMware, Inc.  All rights reserved.
 %%
 
--module(rabbit_sup).
+-module(emqtt_sup).
 
 -behaviour(supervisor).
 
@@ -23,7 +23,7 @@
 
 -export([init/1]).
 
--include("rabbit.hrl").
+-include("emqtt.hrl").
 
 -define(SERVER, ?MODULE).
 
@@ -31,12 +31,12 @@
 
 -ifdef(use_specs).
 
--spec(start_link/0 :: () -> rabbit_types:ok_pid_or_error()).
+-spec(start_link/0 :: () -> emqtt_types:ok_pid_or_error()).
 -spec(start_child/1 :: (atom()) -> 'ok').
 -spec(start_child/3 :: (atom(), atom(), [any()]) -> 'ok').
 -spec(start_restartable_child/1 :: (atom()) -> 'ok').
 -spec(start_restartable_child/2 :: (atom(), [any()]) -> 'ok').
--spec(stop_child/1 :: (atom()) -> rabbit_types:ok_or_error(any())).
+-spec(stop_child/1 :: (atom()) -> emqtt_types:ok_or_error(any())).
 
 -endif.
 
@@ -64,9 +64,9 @@ start_restartable_child(Mod, Args) ->
     Name = list_to_atom(atom_to_list(Mod) ++ "_sup"),
     {ok, _} = supervisor:start_child(
                 ?SERVER,
-                {Name, {rabbit_restartable_sup, start_link,
+                {Name, {emqtt_restartable_sup, start_link,
                         [Name, {Mod, start_link, Args}]},
-                 transient, infinity, supervisor, [rabbit_restartable_sup]}),
+                 transient, infinity, supervisor, [emqtt_restartable_sup]}),
     ok.
 
 stop_child(ChildId) ->
