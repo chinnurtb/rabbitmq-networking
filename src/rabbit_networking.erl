@@ -131,6 +131,13 @@ boot_ssl() ->
     end.
 
 start() ->
+	mnesia:create_table(rabbit_listener, [
+		{ram_copies, [node()]},
+		{record_name, listener},
+		{attributes, record_info(fields, listener)},
+		{type, bag},
+		{match, #listener{_='_'}}
+	]),
     {ok,_} = supervisor2:start_child(
                rabbit_sup,
                {rabbit_tcp_client_sup,
