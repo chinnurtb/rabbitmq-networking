@@ -94,7 +94,9 @@ socket_op(Sock, Fun) ->
 
 recvloop(Socket, ClientPid) ->
   FixedHeader = recv(1, Socket),
+  io:format("fixed header: ~p", [FixedHeader]),
   RemainingLength = recv_length(Socket),
+  io:format("Length: ~p", [RemainingLength]),
   Rest = recv(RemainingLength, Socket),
   Header = mqtt_core:decode_fixed_header(FixedHeader),
   Message = emqtt_packet:decode_message(Header, Rest),
