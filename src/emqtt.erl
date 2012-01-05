@@ -28,7 +28,7 @@
 -emqtt_boot_step({pre_boot, [{description, "emqtt boot start"}]}).
 
 -emqtt_boot_step({database,
-                   [{mfa,         {mnesia, start, []}},
+                   [{mfa,         {emqtt_mnesia, init, []}},
                     {requires,    file_handle_cache},
                     {enables,     external_infrastructure}]}).
 

@@ -108,13 +108,6 @@ boot_tcp() ->
     ok.
 
 start() ->
-	mnesia:create_table(emqtt_listener, [
-		{ram_copies, [node()]},
-		{record_name, listener},
-		{attributes, record_info(fields, listener)},
-		{type, bag},
-		{match, #listener{_='_'}}
-	]),
     {ok,_} = supervisor2:start_child(
                emqtt_sup,
                {emqtt_tcp_client_sup,

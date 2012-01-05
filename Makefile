@@ -1,20 +1,20 @@
-TARGET_DIR=~/rabbitmq
+TARGET_DIR=~/emqtt
 SBIN_DIR=$(TARGET_DIR)/sbin
 MAN_DIR=$(TARGET_DIR)/man
 
-RABBITMQ_NODENAME=rabbit
+RABBITMQ_NODENAME=emqtt
 RABBITMQ_SERVER_START_ARGS ?=
-RABBITMQ_MNESIA_DIR=$(TARGET_DIR)/var/data/rabbitmq-$(RABBITMQ_NODENAME)-mnesia
-RABBITMQ_PLUGINS_EXPAND_DIR=$(TARGET_DIR)/tmp/rabbitmq-$(RABBITMQ_NODENAME)-plugins-scratch
+RABBITMQ_MNESIA_DIR=$(TARGET_DIR)/var/data/emqtt-$(RABBITMQ_NODENAME)-mnesia
+RABBITMQ_PLUGINS_EXPAND_DIR=$(TARGET_DIR)/tmp/emqtt-$(RABBITMQ_NODENAME)-plugins-scratch
 
 SOURCE_DIR=src
 EBIN_DIR=ebin
 INCLUDE_DIR=include
-INCLUDES=$(wildcard $(INCLUDE_DIR)/*.hrl) $(INCLUDE_DIR)/rabbit_framing.hrl
+INCLUDES=$(wildcard $(INCLUDE_DIR)/*.hrl)
 SOURCES=$(wildcard $(SOURCE_DIR)/*.erl) $(USAGES_ERL)
 BEAM_TARGETS=$(patsubst $(SOURCE_DIR)/%.erl, $(EBIN_DIR)/%.beam, $(SOURCES))
-TARGETS=$(EBIN_DIR)/rabbit.app $(INCLUDE_DIR)/rabbit_framing.hrl $(BEAM_TARGETS) plugins
-WEB_URL=http://www.rabbitmq.com/
+TARGETS=$(EBIN_DIR)/emqtt.app $(BEAM_TARGETS) plugins
+WEB_URL=http://www.emqtt.com/
 QC_MODULES := rabbit_backing_queue_qc
 QC_TRIALS ?= 100
 
@@ -38,7 +38,7 @@ ERLC_OPTS=-I $(INCLUDE_DIR) -o $(EBIN_DIR) -Wall -v +debug_info $(call boolean_m
 
 VERSION=0.0.0
 PLUGINS_DIR=plugins
-TARBALL_NAME=rabbitmq-server-$(VERSION)
+TARBALL_NAME=emqtt-server-$(VERSION)
 TARGET_SRC_DIR=dist/$(TARBALL_NAME)
 
 ERL_CALL=erl_call -sname $(RABBITMQ_NODENAME) -e
@@ -64,19 +64,8 @@ endif
 all: $(TARGETS)
 
 .PHONY: plugins
-ifneq "$(PLUGINS_SRC_DIR)" ""
-plugins:
-	[ -d "$(PLUGINS_SRC_DIR)/rabbitmq-server" ] || ln -s "$(CURDIR)" "$(PLUGINS_SRC_DIR)/rabbitmq-server"
-	mkdir -p $(PLUGINS_DIR)
-	PLUGINS_SRC_DIR="" $(MAKE) -C "$(PLUGINS_SRC_DIR)" plugins-dist PLUGINS_DIST_DIR="$(CURDIR)/$(PLUGINS_DIR)" VERSION=$(VERSION)
-	echo "Put your EZs here and use rabbitmq-plugins to enable them." > $(PLUGINS_DIR)/README
-	rm -f $(PLUGINS_DIR)/rabbit_common*.ez
-else
-plugins:
-# Not building plugins
-endif
 
-$(EBIN_DIR)/rabbit.app: $(EBIN_DIR)/rabbit_app.in $(SOURCES) generate_app
+$(EBIN_DIR)/emqtt.app: $(EBIN_DIR)/emqtt_app.in $(SOURCES) generate_app
 	escript generate_app $< $@ $(SOURCE_DIR)
 
 $(EBIN_DIR)/%.beam: $(SOURCE_DIR)/%.erl
@@ -86,7 +75,7 @@ dialyze: $(BEAM_TARGETS) $(BASIC_PLT)
 	dialyzer --plt $(BASIC_PLT) --no_native --fullpath \
 	  -Wrace_conditions $(BEAM_TARGETS)
 
-# rabbit.plt is used by rabbitmq-erlang-client's dialyze make target
+# rabbit.plt is used by emqtt-erlang-client's dialyze make target
 create-plt: $(RABBIT_PLT)
 
 $(RABBIT_PLT): $(BEAM_TARGETS) $(BASIC_PLT)
@@ -104,8 +93,7 @@ $(BASIC_PLT): $(BEAM_TARGETS)
 
 clean:
 	rm -f $(EBIN_DIR)/*.beam
-	rm -f $(EBIN_DIR)/rabbit.app $(EBIN_DIR)/rabbit.boot $(EBIN_DIR)/rabbit.script $(EBIN_DIR)/rabbit.rel
-	rm -f $(SOURCE_DIR)/rabbit_framing_amqp_*.erl 
+	rm -f $(EBIN_DIR)/emqtt.app $(EBIN_DIR)/emqtt.boot $(EBIN_DIR)/emqtt.script $(EBIN_DIR)/emqtt.rel
 	rm -f $(RABBIT_PLT)
 
 cleandb:
@@ -124,20 +112,20 @@ run: all
 	$(BASIC_SCRIPT_ENVIRONMENT_SETTINGS) \
 		RABBITMQ_ALLOW_INPUT=true \
 		RABBITMQ_SERVER_START_ARGS="$(RABBITMQ_SERVER_START_ARGS)" \
-		./scripts/rabbitmq-server
+		./scripts/emqtt-server
 
 run-node: all
 	$(BASIC_SCRIPT_ENVIRONMENT_SETTINGS) \
 		RABBITMQ_NODE_ONLY=true \
 		RABBITMQ_ALLOW_INPUT=true \
 		RABBITMQ_SERVER_START_ARGS="$(RABBITMQ_SERVER_START_ARGS)" \
-		./scripts/rabbitmq-server
+		./scripts/emqtt-server
 
 run-background-node: all
 	$(BASIC_SCRIPT_ENVIRONMENT_SETTINGS) \
 		RABBITMQ_NODE_ONLY=true \
 		RABBITMQ_SERVER_START_ARGS="$(RABBITMQ_SERVER_START_ARGS)" \
-		./scripts/rabbitmq-server
+		./scripts/emqtt-server
 
 run-tests: all
 	OUT=$$(echo "rabbit_tests:all_tests()." | $(ERL_CALL)) ; \
@@ -154,7 +142,7 @@ start-background-node: all
 
 start-rabbit-on-node: all
 	echo "rabbit:start()." | $(ERL_CALL)
-	./scripts/rabbitmqctl -n $(RABBITMQ_NODENAME) wait $(RABBITMQ_MNESIA_DIR).pid
+	./scripts/emqtt-ctl -n $(RABBITMQ_NODENAME) wait $(RABBITMQ_MNESIA_DIR).pid
 
 stop-rabbit-on-node: all
 	echo "rabbit:stop()." | $(ERL_CALL)
@@ -209,7 +197,7 @@ install_bin: all install_dirs
 	cp -r ebin include $(TARGET_DIR)
 
 	chmod 0755 scripts/*
-	for script in rabbitmq-env rabbitmq-server rabbitmqctl rabbitmq-plugins; do \
+	for script in emqtt-env emqtt-server emqtt-ctl; do \
 		cp scripts/$$script $(TARGET_DIR)/sbin; \
 		[ -e $(SBIN_DIR)/$$script ] || ln -s $(SCRIPTS_REL_PATH)/$$script $(SBIN_DIR)/$$script; \
 	done
